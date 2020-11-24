@@ -1,10 +1,5 @@
 #pragma once
 
-uint8_t  GetU8(char* memory) {
-    uint8_t* p = (uint8_t*)(memory);
-    return p[0];
-}
-
 uint16_t GetU16(char* memory) {
 	uint8_t* p = (uint8_t*)(memory);
 	return (((uint16_t)p[1]) << 8) |
@@ -65,15 +60,15 @@ void AseLoad() {
             GetU16(& buffer[10]),
             GetU16(& buffer[12]),
             GetU32(& buffer[14]),
-            GetU16(& buffer[18]), // speed + 2*DWORD. DWORD = 4 bytes. 2 * 4 + 2 = 10
-            GetU8(& buffer[28]), // palette entry + BYTE*3
-            GetU16(& buffer[32]), // num colors
-            GetU8(& buffer[34]), // pixel width
-            GetU8(& buffer[35]), // pixel height
-            (int16_t) GetU16(& buffer[36]), // grid x
-            (int16_t) GetU16(& buffer[38]), // grid y
-            GetU16(& buffer[40]), // grid width
-            GetU16(& buffer[42]) // grid height
+            GetU16(& buffer[18]),
+            (uint8_t) buffer[28],
+            GetU16(& buffer[32]),
+            (uint8_t) buffer[34],
+            (uint8_t) buffer[35],
+            (int16_t) GetU16(& buffer[36]),
+            (int16_t) GetU16(& buffer[38]),
+            GetU16(& buffer[40]),
+            GetU16(& buffer[42])
         };
 
         std::cout << header.file_size << std::endl;
@@ -84,9 +79,9 @@ void AseLoad() {
         std::cout << header.color_depth << std::endl;
         std::cout << header.flags << std::endl;
         std::cout << header.speed << std::endl;
-        std::cout << header.palette_entry << std::endl;
+        std::cout << (int64_t) header.palette_entry << std::endl;
         std::cout << header.num_colors << std::endl;
-        std::cout << (int64_t)header.pixel_width << std::endl;
+        std::cout << (int64_t) header.pixel_width << std::endl;
         std::cout << (int64_t) header.pixel_height << std::endl;
         std::cout << header.x_grid << std::endl;
         std::cout << header.y_grid << std::endl;
