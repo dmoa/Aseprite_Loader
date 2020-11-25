@@ -14,6 +14,23 @@ uint32_t GetU32(void* memory) {
 		   (((uint32_t)p[0]));
 }
 
+#define HEADER_MN 0xA5E0
+#define FRAME_MN 0xF1FA
+
+#define OLD_PALETTE_1 0x0004 // depricated
+#define OLD_PALETTE_2 0x0011 // depricated
+#define LAYER 0x2004
+#define CEL 0x2005
+#define CEL_EXTRA 0x2006
+#define COLOR_PROFILE 0x2007
+#define MASK 0x2016 // depricated
+#define PATH 0x2017 // depricated
+#define TAGS 0x2018
+#define PALETTE 0x2019
+#define USER_DATA 0x2020
+#define SLICE 0x2022
+
+
 struct Ase_Header {
     uint32_t file_size;
     uint16_t magic_number;
@@ -36,6 +53,19 @@ struct Ase_Header {
     int16_t  y_grid;
     uint16_t grid_width;
     uint16_t grid_height;
+};
+
+struct Ase_Frame {
+    uint32_t num_bytes;
+    uint16_t magic_number;
+    uint16_t old_num_chunks; // old specifier of number of chunks
+    uint16_t frame_duration;
+    uint32_t new_num_chunks; // number of chunks, if 0, use old field.
+};
+
+struct Chunk_Format {
+    uint32_t size;
+    uint16_t chunk_type;
 };
 
 void AseLoad() {
@@ -71,6 +101,34 @@ void AseLoad() {
             GetU16(& buffer[42])
         };
 
+        Ase_Frame frames [header.num_frames];
+
+        char* buffer_p = & buffer[128];
+
+        for (int i = 0; i < header.num_frames; i++) {
+            frames[i] = {
+                GetU32(buffer_p),
+                GetU16(buffer_p + 5),
+                GetU16(buffer_p + 6),
+                GetU16(buffer_p + 8),
+                GetU32(buffer_p + 12)
+            };
+
+            if (frames[i].magic_number != FRAME_MN) {
+                std::cout << "Frame " << i << " magic number not correct, corrupt file?" << std::endl;
+            }
+
+            buffer_p += 16;
+
+            for (int j = 0; j < frames[i].new_num_chunks; j++) {
+
+                GetU32(buffer_p);
+                GetU16(buffer_p + 4);
+                buffer_p += GetU32(buffer_p);
+            }
+
+        }
+
         std::cout << header.file_size << std::endl;
         std::cout << header.magic_number << std::endl;
         std::cout << header.num_frames << std::endl;
@@ -87,6 +145,17 @@ void AseLoad() {
         std::cout << header.y_grid << std::endl;
         std::cout << header.grid_width << std::endl;
         std::cout << header.grid_height << std::endl;
+
+        for (int i = 0; i < header.num_frames; i++) {
+
+            std::cout << "--------------------" << std::endl;
+            std::cout << (int) frames[i].num_bytes << std::endl;
+            std::cout << (int) frames[i].magic_number << std::endl;
+            std::cout << (int) frames[i].old_num_chunks << std::endl;
+            std::cout << (int) frames[i].frame_duration << std::endl;
+            std::cout << (int) frames[i].new_num_chunks << std::endl;
+
+        }
 
 
     } else {
