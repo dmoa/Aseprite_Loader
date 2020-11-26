@@ -17,6 +17,9 @@ uint32_t GetU32(void* memory) {
 #define HEADER_MN 0xA5E0
 #define FRAME_MN 0xF1FA
 
+#define HEADER_SIZE 128
+#define FRAME_SIZE 16
+
 #define OLD_PALETTE_1 0x0004 // depricated
 #define OLD_PALETTE_2 0x0011 // depricated
 #define LAYER 0x2004
@@ -63,9 +66,18 @@ struct Ase_Frame {
     uint32_t new_num_chunks; // number of chunks, if 0, use old field.
 };
 
-struct Chunk_Format {
-    uint32_t size;
-    uint16_t chunk_type;
+struct Palette_Entry {
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
+    uint8_t a;
+};
+
+// Need to fix, for now assuming .ase are indexed sprites,
+// but will need to change in the future as there won't always be 256 entries.
+struct Palette_Chunk {
+    uint32_t num_entries;
+    Palette_Entry entry [256];
 };
 
 void AseLoad() {
@@ -76,8 +88,6 @@ void AseLoad() {
         file.seekg(0, file.end);
         const int length = file.tellg();
         file.seekg(0, std::ios::beg);
-
-        printf("size: %i\n", length);
 
         char buffer [length];
         file.read(buffer, length);
@@ -102,13 +112,15 @@ void AseLoad() {
         };
 
         Ase_Frame frames [header.num_frames];
+        Palette_Chunk palette;
 
-        char* buffer_p = & buffer[128];
+        char* buffer_p = & buffer[HEADER_SIZE];
 
         for (int i = 0; i < header.num_frames; i++) {
+
             frames[i] = {
                 GetU32(buffer_p),
-                GetU16(buffer_p + 5),
+                GetU16(buffer_p + 4),
                 GetU16(buffer_p + 6),
                 GetU16(buffer_p + 8),
                 GetU32(buffer_p + 12)
@@ -116,44 +128,48 @@ void AseLoad() {
 
             if (frames[i].magic_number != FRAME_MN) {
                 std::cout << "Frame " << i << " magic number not correct, corrupt file?" << std::endl;
+                return;
             }
 
-            buffer_p += 16;
+            buffer_p += FRAME_SIZE;
+
 
             for (int j = 0; j < frames[i].new_num_chunks; j++) {
 
-                GetU32(buffer_p);
-                GetU16(buffer_p + 4);
-                buffer_p += GetU32(buffer_p);
+                uint32_t chunk_size = GetU32(buffer_p);
+                uint16_t chunk_type = GetU16(buffer_p + 4);
+
+                switch (chunk_type) {
+
+                    case OLD_PALETTE_1: case OLD_PALETTE_2: case MASK: case PATH:
+                        std::cout << "deprictated chunk type" << std::endl;
+                        break;
+
+                    case PALETTE: {
+
+                        palette.num_entries = GetU32(buffer_p + 6);
+                        // the range of colors that are different
+                        uint32_t first_to_change = GetU32(buffer_p + 10);
+                        uint32_t  last_to_change = GetU32(buffer_p + 14);
+
+                        for (int k = first_to_change; k < last_to_change; k++) {
+
+                            if (GetU16(buffer_p + 18) == 1) {
+                                std::cout << "Name flag detected, cannot load! Color Index: " << k << std::endl;
+                                return;
+                            }
+                            palette.entry[k] = {buffer_p[20 + k*6], buffer_p[22 + k*6], buffer_p[24 + k*6], buffer_p[26 + k*6]};
+                        }
+                        break;
+                    }
+
+                    default:
+                        std::cout << "type not accounted" << std::endl;
+                        break;
+                }
+
+                buffer_p += chunk_size;
             }
-
-        }
-
-        std::cout << header.file_size << std::endl;
-        std::cout << header.magic_number << std::endl;
-        std::cout << header.num_frames << std::endl;
-        std::cout << header.width << std::endl;
-        std::cout << header.height << std::endl;
-        std::cout << header.color_depth << std::endl;
-        std::cout << header.flags << std::endl;
-        std::cout << header.speed << std::endl;
-        std::cout << (int64_t) header.palette_entry << std::endl;
-        std::cout << header.num_colors << std::endl;
-        std::cout << (int64_t) header.pixel_width << std::endl;
-        std::cout << (int64_t) header.pixel_height << std::endl;
-        std::cout << header.x_grid << std::endl;
-        std::cout << header.y_grid << std::endl;
-        std::cout << header.grid_width << std::endl;
-        std::cout << header.grid_height << std::endl;
-
-        for (int i = 0; i < header.num_frames; i++) {
-
-            std::cout << "--------------------" << std::endl;
-            std::cout << (int) frames[i].num_bytes << std::endl;
-            std::cout << (int) frames[i].magic_number << std::endl;
-            std::cout << (int) frames[i].old_num_chunks << std::endl;
-            std::cout << (int) frames[i].frame_duration << std::endl;
-            std::cout << (int) frames[i].new_num_chunks << std::endl;
 
         }
 
