@@ -240,7 +240,7 @@ void AseLoad() {
 
                         uint8_t pixels [header.width * header.height];
 
-                        unsigned int data_size = decompressor.Feed(buffer_p + 26, 26 - chunk_size, & pixel_data[i][0], header.width * header.height, true);
+                        unsigned int data_size = decompressor.Feed(buffer_p + 26, 26 - chunk_size, & pixels[0], header.width * header.height, true);
                         if (data_size == -1) {
                             std::cout << "Failed to decompress pixels! Exit." << std::endl;
                             return;
