@@ -1,4 +1,58 @@
+/*
+Aseprite Loader
+Copyright © 2020 Stan O
+
+* Permission is granted to anyone to use this software
+* for any purpose, including commercial applications,
+* and to alter it and redistribute it freely, subject to
+* the following restrictions:
+*
+* 1. The origin of this software must not be
+*    misrepresented; you must not claim that you
+*    wrote the original software. If you use this
+*    software in a product, an acknowledgment in
+*    the product documentation would be appreciated
+*    but is not required.
+*
+* 2. Altered source versions must be plainly marked
+*    as such, and must not be misrepresented as
+*    being the original software.
+*
+* 3. This notice may not be removed or altered from
+*    any source distribution.
+
+
+
+
+Parses:
+    - All header data
+    - All frame data
+    - All pixel data
+
+Chunks Supported:
+    - CEL
+        - No opacity support
+    - PALETTE 0x2019
+        - No name support
+
+
+- Only supports indexed color mode
+- Only supports zlib compressed pixel data
+
+- Does not support blend mode
+- Does not support layers
+
+Let me know if you want something added,
+    ~ Stan
+
+*/
+
 #pragma once
+
+
+#include <stdio.h>
+#include <fstream>
+#include "inflate/decompressor.h"
 
 uint16_t GetU16(char* memory) {
 	uint8_t* p = (uint8_t*)(memory);
@@ -81,6 +135,8 @@ struct Palette_Chunk {
 };
 
 void AseLoad() {
+    Decompressor decompressor = Decompressor();
+
     std::ifstream file("example.ase", std::ifstream::binary);
 
     if (file) {
@@ -91,6 +147,7 @@ void AseLoad() {
 
         char buffer [length];
         file.read(buffer, length);
+
 
         Ase_Header header = {
             GetU32(& buffer[0]),
@@ -113,6 +170,7 @@ void AseLoad() {
 
         Ase_Frame frames [header.num_frames];
         Palette_Chunk palette;
+        uint8_t pixel_data [header.num_frames] [header.width * header.height];
 
         char* buffer_p = & buffer[HEADER_SIZE];
 
@@ -148,7 +206,8 @@ void AseLoad() {
                     case PALETTE: {
 
                         palette.num_entries = GetU32(buffer_p + 6);
-                        // the range of colors that are different
+                        // Specifies the range of unique colors in the palette.
+                        // There may be many repeated colors, so range -> efficient.
                         uint32_t first_to_change = GetU32(buffer_p + 10);
                         uint32_t  last_to_change = GetU32(buffer_p + 14);
 
@@ -163,6 +222,35 @@ void AseLoad() {
                         break;
                     }
 
+                    case CEL: {
+                        std::cout << "cell chunk" << std::endl;
+                        int16_t x = GetU16(buffer_p + 8);
+                        int16_t y = GetU16(buffer_p + 10);
+                        uint16_t cel_type = GetU16(buffer_p + 13);
+
+                        if (cel_type != 2) {
+                            std::cout << "Pixel format not supported! Exit.";
+                            return;
+                        }
+
+                        uint16_t width  = GetU16(buffer_p + 22);
+                        uint16_t height = GetU16(buffer_p + 24);
+
+                        std::cout << "width: " << width << " height: " << height << std::endl;
+
+                        uint8_t pixels [header.width * header.height];
+
+                        unsigned int data_size = decompressor.Feed(buffer_p + 26, 26 - chunk_size, & pixel_data[i][0], header.width * header.height, true);
+                        if (data_size == -1) {
+                            std::cout << "Failed to decompress pixels! Exit." << std::endl;
+                            return;
+                        }
+
+                        std::cout << std::endl;
+
+                        break;
+                    }
+
                     default:
                         std::cout << "type not accounted" << std::endl;
                         break;
@@ -171,7 +259,9 @@ void AseLoad() {
                 buffer_p += chunk_size;
             }
 
+
         }
+            std::cout << "transparent: " << (int) header.palette_entry << std::endl;
 
 
     } else {
