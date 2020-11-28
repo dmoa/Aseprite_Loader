@@ -120,6 +120,12 @@ struct Ase_Frame {
     uint32_t new_num_chunks; // number of chunks, if 0, use old field.
 };
 
+struct Ase_Tag {
+    uint16_t from;
+    uint16_t to;
+    const char* name;
+};
+
 struct Palette_Entry {
     uint8_t r;
     uint8_t g;
@@ -134,7 +140,14 @@ struct Palette_Chunk {
     Palette_Entry entry [256];
 };
 
-void AseLoad() {
+struct Ase_Output {
+    int width;
+    int height;
+    uint8_t** const pixels;
+    Palette_Chunk palette;
+};
+
+Ase_Output AseLoad() {
 
     std::ifstream file("example.ase", std::ifstream::binary);
 
@@ -169,11 +182,20 @@ void AseLoad() {
 
         Ase_Frame frames [header.num_frames];
         Palette_Chunk palette;
-        uint8_t pixel_data [header.num_frames] [header.width * header.height];
+        uint8_t** const pixel_data = new uint8_t* [header.num_frames];
+        for (int i = 0; i < header.num_frames; i++) pixel_data[i] = new uint8_t [header.width * header.height];
+        const Ase_Tag** tags = NULL;
+
+        Ase_Output output = {header.width, header.height, pixel_data, palette};
 
         char* buffer_p = & buffer[HEADER_SIZE];
 
         for (int i = 0; i < header.num_frames; i++) {
+
+            // fill the pixel indexes in the frame with transparent color index
+            for (int j = 0; j < header.width * header.height; j++) {
+                pixel_data[i][j] = header.palette_entry;
+            }
 
             frames[i] = {
                 GetU32(buffer_p),
@@ -185,7 +207,7 @@ void AseLoad() {
 
             if (frames[i].magic_number != FRAME_MN) {
                 std::cout << "Frame " << i << " magic number not correct, corrupt file?" << std::endl;
-                return;
+                exit(-1);
             }
 
             buffer_p += FRAME_SIZE;
@@ -197,10 +219,6 @@ void AseLoad() {
                 uint16_t chunk_type = GetU16(buffer_p + 4);
 
                 switch (chunk_type) {
-
-                    case OLD_PALETTE_1: case OLD_PALETTE_2: case MASK: case PATH:
-                        std::cout << "deprictated chunk type" << std::endl;
-                        break;
 
                     case PALETTE: {
 
@@ -214,7 +232,7 @@ void AseLoad() {
 
                             if (GetU16(buffer_p + 18) == 1) {
                                 std::cout << "Name flag detected, cannot load! Color Index: " << k << std::endl;
-                                return;
+                                exit(-1);
                             }
                             palette.entry[k] = {buffer_p[20 + k*6], buffer_p[22 + k*6], buffer_p[24 + k*6], buffer_p[26 + k*6]};
                         }
@@ -222,37 +240,33 @@ void AseLoad() {
                     }
 
                     case CEL: {
-                        std::cout << "cell chunk" << std::endl;
                         int16_t x = GetU16(buffer_p + 8);
                         int16_t y = GetU16(buffer_p + 10);
                         uint16_t cel_type = GetU16(buffer_p + 13);
 
                         if (cel_type != 2) {
                             std::cout << "Pixel format not supported! Exit.";
-                            return;
+                            exit(-1);
                         }
 
                         uint16_t width  = GetU16(buffer_p + 22);
                         uint16_t height = GetU16(buffer_p + 24);
+                        uint8_t pixels [width * height];
 
-                        std::cout << "width: " << width << " height: " << height << std::endl;
-
-                        uint8_t pixels [header.width * header.height];
-
-                        unsigned int data_size = Decompressor_Feed(buffer_p + 26, 26 - chunk_size, & pixels[0], header.width * header.height, true);
+                        unsigned int data_size = Decompressor_Feed(buffer_p + 26, 26 - chunk_size, & pixels[0], width * height, true);
                         if (data_size == -1) {
                             std::cout << "Failed to decompress pixels! Exit." << std::endl;
-                            return;
+                            exit(-1);
                         }
 
-                        std::cout << std::endl;
+                        for (int k = 0; k < width * height; k ++) {
+                            pixel_data[i][y * width + k] = pixels[k];
+                        }
 
                         break;
                     }
 
-                    default:
-                        std::cout << "type not accounted" << std::endl;
-                        break;
+                    default: break;
                 }
 
                 buffer_p += chunk_size;
@@ -261,25 +275,32 @@ void AseLoad() {
 
         }
 
-        std::cout << header.file_size << std::endl;
-        std::cout << header.magic_number << std::endl;
-        std::cout << header.num_frames << std::endl;
-        std::cout << header.width << std::endl;
-        std::cout << header.height << std::endl;
-        std::cout << header.color_depth << std::endl;
-        std::cout << header.flags << std::endl;
-        std::cout << header.speed << std::endl;
-        std::cout << (int64_t) header.palette_entry << std::endl;
-        std::cout << header.num_colors << std::endl;
-        std::cout << (int64_t) header.pixel_width << std::endl;
-        std::cout << (int64_t) header.pixel_height << std::endl;
-        std::cout << header.x_grid << std::endl;
-        std::cout << header.y_grid << std::endl;
-        std::cout << header.grid_width << std::endl;
-        std::cout << header.grid_height << std::endl;
+        // std::cout << header.file_size << std::endl;
+        // std::cout << header.magic_number << std::endl;
+        // std::cout << header.num_frames << std::endl;
+        // std::cout << header.width << std::endl;
+        // std::cout << header.height << std::endl;
+        // std::cout << header.color_depth << std::endl;
+        // std::cout << header.flags << std::endl;
+        // std::cout << header.speed << std::endl;
+        // std::cout << (int64_t) header.palette_entry << std::endl;
+        // std::cout << header.num_colors << std::endl;
+        // std::cout << (int64_t) header.pixel_width << std::endl;
+        // std::cout << (int64_t) header.pixel_height << std::endl;
+        // std::cout << header.x_grid << std::endl;
+        // std::cout << header.y_grid << std::endl;
+        // std::cout << header.grid_width << std::endl;
+        // std::cout << header.grid_height << std::endl;
+
+        for (int i = 0; i < header.width * header.height; i++) {
+            std::cout << (int) pixel_data[0][i] << " ";
+        }
+
+        return output;
 
 
     } else {
         std::cout << "file could not be loaded" << std::endl;
+        exit(-1);
     }
 }
