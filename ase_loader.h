@@ -52,7 +52,7 @@ Let me know if you want something added,
 
 #include <stdio.h>
 #include <fstream>
-#include "inflate/decompressor.h"
+#include "decompressor.h"
 
 uint16_t GetU16(char* memory) {
 	uint8_t* p = (uint8_t*)(memory);
@@ -135,7 +135,6 @@ struct Palette_Chunk {
 };
 
 void AseLoad() {
-    Decompressor decompressor = Decompressor();
 
     std::ifstream file("example.ase", std::ifstream::binary);
 
@@ -240,7 +239,7 @@ void AseLoad() {
 
                         uint8_t pixels [header.width * header.height];
 
-                        unsigned int data_size = decompressor.Feed(buffer_p + 26, 26 - chunk_size, & pixels[0], header.width * header.height, true);
+                        unsigned int data_size = Decompressor_Feed(buffer_p + 26, 26 - chunk_size, & pixels[0], header.width * header.height, true);
                         if (data_size == -1) {
                             std::cout << "Failed to decompress pixels! Exit." << std::endl;
                             return;
@@ -261,7 +260,23 @@ void AseLoad() {
 
 
         }
-            std::cout << "transparent: " << (int) header.palette_entry << std::endl;
+
+        std::cout << header.file_size << std::endl;
+        std::cout << header.magic_number << std::endl;
+        std::cout << header.num_frames << std::endl;
+        std::cout << header.width << std::endl;
+        std::cout << header.height << std::endl;
+        std::cout << header.color_depth << std::endl;
+        std::cout << header.flags << std::endl;
+        std::cout << header.speed << std::endl;
+        std::cout << (int64_t) header.palette_entry << std::endl;
+        std::cout << header.num_colors << std::endl;
+        std::cout << (int64_t) header.pixel_width << std::endl;
+        std::cout << (int64_t) header.pixel_height << std::endl;
+        std::cout << header.x_grid << std::endl;
+        std::cout << header.y_grid << std::endl;
+        std::cout << header.grid_width << std::endl;
+        std::cout << header.grid_height << std::endl;
 
 
     } else {
