@@ -52,6 +52,7 @@ Let me know if you want something added,
 
 #include <stdio.h>
 #include <fstream>
+#include <string>
 #include "decompressor.h"
 
 uint16_t GetU16(char* memory) {
@@ -123,7 +124,7 @@ struct Ase_Frame {
 struct Ase_Tag {
     uint16_t from;
     uint16_t to;
-    const char* name;
+    std::string name;
 };
 
 struct Palette_Entry {
@@ -141,10 +142,11 @@ struct Palette_Chunk {
 };
 
 struct Ase_Output {
+    uint8_t** const pixels;
     int width;
     int height;
-    uint8_t** const pixels;
     Palette_Chunk palette;
+    Ase_Tag* tags;
 };
 
 Ase_Output AseLoad() {
@@ -184,9 +186,7 @@ Ase_Output AseLoad() {
         Palette_Chunk palette;
         uint8_t** const pixel_data = new uint8_t* [header.num_frames];
         for (int i = 0; i < header.num_frames; i++) pixel_data[i] = new uint8_t [header.width * header.height];
-        const Ase_Tag** tags = NULL;
-
-        Ase_Output output = {header.width, header.height, pixel_data, palette};
+        Ase_Tag* tags = NULL;
 
         char* buffer_p = & buffer[HEADER_SIZE];
 
@@ -266,6 +266,29 @@ Ase_Output AseLoad() {
                         break;
                     }
 
+                    case TAGS: {
+                        int size = GetU16(buffer_p + 6);
+                        tags = new Ase_Tag [size];
+                        std::cout << size << std::endl;
+
+                        int tag_buffer_offset = 0;
+                        for (int k = 0; k < size; k ++) {
+
+                            tags[k].from = GetU16(buffer_p + tag_buffer_offset + 16);
+                            tags[k].to = GetU16(buffer_p + tag_buffer_offset + 18);
+
+                            int slen = GetU16(buffer_p + tag_buffer_offset + 33);
+                            tags[k].name = "";
+                            for (int a = 0; a < slen; a ++) {
+                                tags[k].name += *(buffer_p + tag_buffer_offset + a + 35);
+                            }
+
+                            tag_buffer_offset += 19 + slen;
+                        }
+
+                        break;
+                    }
+
                     default: break;
                 }
 
@@ -296,6 +319,7 @@ Ase_Output AseLoad() {
             std::cout << (int) pixel_data[0][i] << " ";
         }
 
+        Ase_Output output = {pixel_data, header.width, header.height, palette, tags};
         return output;
 
 
