@@ -147,6 +147,7 @@ struct Ase_Output {
     int height;
     Palette_Chunk palette;
     Ase_Tag* tags;
+    uint16_t* frame_durations;
 };
 
 Ase_Output AseLoad() {
@@ -183,10 +184,11 @@ Ase_Output AseLoad() {
         };
 
         Ase_Frame frames [header.num_frames];
-        Palette_Chunk palette;
         uint8_t** const pixel_data = new uint8_t* [header.num_frames];
         for (int i = 0; i < header.num_frames; i++) pixel_data[i] = new uint8_t [header.width * header.height];
+        Palette_Chunk palette;
         Ase_Tag* tags = NULL;
+        uint16_t* frame_durations = new uint16_t [header.num_frames];
 
         char* buffer_p = & buffer[HEADER_SIZE];
 
@@ -204,6 +206,8 @@ Ase_Output AseLoad() {
                 GetU16(buffer_p + 8),
                 GetU32(buffer_p + 12)
             };
+
+            frame_durations[i] = frames[i].frame_duration;
 
             if (frames[i].magic_number != FRAME_MN) {
                 std::cout << "Frame " << i << " magic number not correct, corrupt file?" << std::endl;
@@ -298,28 +302,7 @@ Ase_Output AseLoad() {
 
         }
 
-        // std::cout << header.file_size << std::endl;
-        // std::cout << header.magic_number << std::endl;
-        // std::cout << header.num_frames << std::endl;
-        // std::cout << header.width << std::endl;
-        // std::cout << header.height << std::endl;
-        // std::cout << header.color_depth << std::endl;
-        // std::cout << header.flags << std::endl;
-        // std::cout << header.speed << std::endl;
-        // std::cout << (int64_t) header.palette_entry << std::endl;
-        // std::cout << header.num_colors << std::endl;
-        // std::cout << (int64_t) header.pixel_width << std::endl;
-        // std::cout << (int64_t) header.pixel_height << std::endl;
-        // std::cout << header.x_grid << std::endl;
-        // std::cout << header.y_grid << std::endl;
-        // std::cout << header.grid_width << std::endl;
-        // std::cout << header.grid_height << std::endl;
-
-        for (int i = 0; i < header.width * header.height; i++) {
-            std::cout << (int) pixel_data[0][i] << " ";
-        }
-
-        Ase_Output output = {pixel_data, header.width, header.height, palette, tags};
+        Ase_Output output = {pixel_data, header.width, header.height, palette, tags, frame_durations};
         return output;
 
 
