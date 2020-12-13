@@ -150,9 +150,9 @@ struct Ase_Output {
     uint16_t* frame_durations;
 };
 
-Ase_Output AseLoad() {
+Ase_Output AseLoad(std::string path) {
 
-    std::ifstream file("example.ase", std::ifstream::binary);
+    std::ifstream file(path, std::ifstream::binary);
 
     if (file) {
 
