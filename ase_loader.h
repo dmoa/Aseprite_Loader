@@ -49,24 +49,34 @@ Let me know if you want something added,
 
 #pragma once
 
-
 #include <stdio.h>
 #include <fstream>
 #include <string>
+#include <math.h>
+#include <stdint.h>
 #include "decompressor.h"
 
-uint16_t GetU16(char* memory) {
-	uint8_t* p = (uint8_t*)(memory);
-	return (((uint16_t)p[1]) << 8) |
-		   (((uint16_t)p[0]));
+typedef int64_t  s64;
+typedef int32_t  s32;
+typedef int16_t  s16;
+typedef int8_t   s8;
+typedef uint64_t u64;
+typedef uint32_t u32;
+typedef uint16_t u16;
+typedef uint8_t  u8;
+
+inline u16 GetU16(char* memory) {
+	u8* p = (u8*)(memory);
+	return (((u16)p[1]) << 8) |
+		   (((u16)p[0]));
 }
 
-uint32_t GetU32(void* memory) {
-	uint8_t* p = (uint8_t*)(memory);
-	return (((uint32_t)p[3]) << 24) |
-		   (((uint32_t)p[2]) << 16) |
-		   (((uint32_t)p[1]) <<  8) |
-		   (((uint32_t)p[0]));
+inline u32 GetU32(void* memory) {
+	u8* p = (u8*)(memory);
+	return (((u32)p[3]) << 24) |
+		   (((u32)p[2]) << 16) |
+		   (((u32)p[1]) <<  8) |
+		   (((u32)p[0]));
 }
 
 #define HEADER_MN 0xA5E0
@@ -90,67 +100,70 @@ uint32_t GetU32(void* memory) {
 
 
 struct Ase_Header {
-    uint32_t file_size;
-    uint16_t magic_number;
-    uint16_t num_frames;
-    uint16_t width;
-    uint16_t height;
-    uint16_t color_depth;    // 32 RGBA, 16 Grayscale, 8 Indexed
-    uint32_t flags;          // 1 = layer opacity valid
-    uint16_t speed;          // frame speed, depricated
-    uint8_t  palette_entry;  // the one transparent colour for indexed sprites only
-    uint16_t num_colors;
+    u32 file_size;
+    u16 magic_number;
+    u16 num_frames;
+    u16 width;
+    u16 height;
+    u16 color_depth;    // 32 RGBA, 16 Grayscale, 8 Indexed
+    u32 flags;          // 1 = layer opacity valid
+    u16 speed;          // frame speed, depricated
+    u8  palette_entry;  // the one transparent colour for indexed sprites only
+    u16 num_colors;
 
     // Pixel ratio. Default 1:1.
-    uint8_t  pixel_width;
-    uint8_t  pixel_height;
+    u8  pixel_width;
+    u8  pixel_height;
 
 
     // Rendered grid for aseprite, not for asset loading.
-    int16_t  x_grid;
-    int16_t  y_grid;
-    uint16_t grid_width;
-    uint16_t grid_height;
+    s16  x_grid;
+    s16  y_grid;
+    u16 grid_width;
+    u16 grid_height;
 };
 
 struct Ase_Frame {
-    uint32_t num_bytes;
-    uint16_t magic_number;
-    uint16_t old_num_chunks; // old specifier of number of chunks
-    uint16_t frame_duration;
-    uint32_t new_num_chunks; // number of chunks, if 0, use old field.
+    u32 num_bytes;
+    u16 magic_number;
+    u16 old_num_chunks; // old specifier of number of chunks
+    u16 frame_duration;
+    u32 new_num_chunks; // number of chunks, if 0, use old field.
 };
 
 struct Ase_Tag {
-    uint16_t from;
-    uint16_t to;
+    u16 from;
+    u16 to;
     std::string name;
 };
 
-struct Palette_Entry {
-    uint8_t r;
-    uint8_t g;
-    uint8_t b;
-    uint8_t a;
+// delete and replace with SDL_Color if using SDL
+struct Ase_Color {
+    u8 r;
+    u8 g;
+    u8 b;
+    u8 a;
 };
 
 // Need to fix, for now assuming .ase are indexed sprites,
 // but will need to change in the future as there won't always be 256 entries.
 struct Palette_Chunk {
-    uint32_t num_entries;
-    Palette_Entry entry [256];
+    u32 num_entries;
+    Ase_Color entries [256];
 };
 
 struct Ase_Output {
-    uint8_t** const pixels;
-    int width;
-    int height;
+    Ase_Output() {}; // c++ bullshit makes me define an empty constructor...
+    u8* pixels;
+    int frame_width;
+    int frame_height;
     Palette_Chunk palette;
     Ase_Tag* tags;
-    uint16_t* frame_durations;
+    u16* frame_durations;
+    int num_frames;
 };
 
-Ase_Output AseLoad(std::string path) {
+Ase_Output* Ase_Load(std::string path) {
 
     std::ifstream file(path, std::ifstream::binary);
 
@@ -162,7 +175,7 @@ Ase_Output AseLoad(std::string path) {
 
         char buffer [length];
         file.read(buffer, length);
-
+        char* buffer_p = & buffer[HEADER_SIZE];
 
         Ase_Header header = {
             GetU32(& buffer[0]),
@@ -173,31 +186,33 @@ Ase_Output AseLoad(std::string path) {
             GetU16(& buffer[12]),
             GetU32(& buffer[14]),
             GetU16(& buffer[18]),
-            (uint8_t) buffer[28],
+            (u8) buffer[28],
             GetU16(& buffer[32]),
-            (uint8_t) buffer[34],
-            (uint8_t) buffer[35],
-            (int16_t) GetU16(& buffer[36]),
-            (int16_t) GetU16(& buffer[38]),
+            (u8) buffer[34],
+            (u8) buffer[35],
+            (s16) GetU16(& buffer[36]),
+            (s16) GetU16(& buffer[38]),
             GetU16(& buffer[40]),
             GetU16(& buffer[42])
         };
 
-        Ase_Frame frames [header.num_frames];
-        uint8_t** const pixel_data = new uint8_t* [header.num_frames];
-        for (int i = 0; i < header.num_frames; i++) pixel_data[i] = new uint8_t [header.width * header.height];
-        Palette_Chunk palette;
-        Ase_Tag* tags = NULL;
-        uint16_t* frame_durations = new uint16_t [header.num_frames];
+        Ase_Output* output = new Ase_Output();
+        output->frame_width  = header.width;
+        output->frame_height = header.height;
+        output->num_frames   = header.num_frames;
+        output->pixels = new u8 [header.width * header.height * header.num_frames];
+        output->frame_durations = new u16 [header.num_frames];
 
-        char* buffer_p = & buffer[HEADER_SIZE];
+        // helps us with formulating output but not all data needed for output
+        Ase_Frame frames [header.num_frames];
+
+        // fill the pixel indexes in the frame with transparent color index
+        for (int i = 0; i < header.width * header.height * header.num_frames; i++) {
+            output->pixels[i] = header.palette_entry;
+        }
 
         for (int i = 0; i < header.num_frames; i++) {
 
-            // fill the pixel indexes in the frame with transparent color index
-            for (int j = 0; j < header.width * header.height; j++) {
-                pixel_data[i][j] = header.palette_entry;
-            }
 
             frames[i] = {
                 GetU32(buffer_p),
@@ -207,7 +222,7 @@ Ase_Output AseLoad(std::string path) {
                 GetU32(buffer_p + 12)
             };
 
-            frame_durations[i] = frames[i].frame_duration;
+            output->frame_durations[i] = frames[i].frame_duration;
 
             if (frames[i].magic_number != FRAME_MN) {
                 std::cout << "Frame " << i << " magic number not correct, corrupt file?" << std::endl;
@@ -219,52 +234,55 @@ Ase_Output AseLoad(std::string path) {
 
             for (int j = 0; j < frames[i].new_num_chunks; j++) {
 
-                uint32_t chunk_size = GetU32(buffer_p);
-                uint16_t chunk_type = GetU16(buffer_p + 4);
+                u32 chunk_size = GetU32(buffer_p);
+                u16 chunk_type = GetU16(buffer_p + 4);
 
                 switch (chunk_type) {
 
                     case PALETTE: {
 
-                        palette.num_entries = GetU32(buffer_p + 6);
+                        output->palette.num_entries = GetU32(buffer_p + 6);
                         // Specifies the range of unique colors in the palette.
                         // There may be many repeated colors, so range -> efficient.
-                        uint32_t first_to_change = GetU32(buffer_p + 10);
-                        uint32_t  last_to_change = GetU32(buffer_p + 14);
+                        u32 first_to_change = GetU32(buffer_p + 10);
+                        u32  last_to_change = GetU32(buffer_p + 14);
 
                         for (int k = first_to_change; k < last_to_change; k++) {
 
-                            if (GetU16(buffer_p + 18) == 1) {
+                            if (GetU16(buffer_p + 26) == 1) {
                                 std::cout << "Name flag detected, cannot load! Color Index: " << k << std::endl;
                                 exit(-1);
                             }
-                            palette.entry[k] = {buffer_p[20 + k*6], buffer_p[22 + k*6], buffer_p[24 + k*6], buffer_p[26 + k*6]};
+                            output->palette.entries[k] = {buffer_p[28 + k*6], buffer_p[29 + k*6], buffer_p[30 + k*6], buffer_p[31 + k*6]};
                         }
                         break;
                     }
 
                     case CEL: {
-                        int16_t x = GetU16(buffer_p + 8);
-                        int16_t y = GetU16(buffer_p + 10);
-                        uint16_t cel_type = GetU16(buffer_p + 13);
+                        s16 x_offset = GetU16(buffer_p + 8);
+                        s16 y_offset = GetU16(buffer_p + 10);
+                        u16 cel_type = GetU16(buffer_p + 13);
 
                         if (cel_type != 2) {
-                            std::cout << "Pixel format not supported! Exit.";
+                            std::cout << "Pixel format not supported! Exit.\n";
                             exit(-1);
                         }
 
-                        uint16_t width  = GetU16(buffer_p + 22);
-                        uint16_t height = GetU16(buffer_p + 24);
-                        uint8_t pixels [width * height];
+                        u16 width  = GetU16(buffer_p + 22);
+                        u16 height = GetU16(buffer_p + 24);
+                        u8 pixels [width * height];
 
-                        unsigned int data_size = Decompressor_Feed(buffer_p + 26, 26 - chunk_size, & pixels[0], width * height, true);
+                        unsigned int data_size = Decompressor_Feed(buffer_p + 26, 26 - chunk_size, pixels, width * height, true);
                         if (data_size == -1) {
-                            std::cout << "Failed to decompress pixels! Exit." << std::endl;
+                            std::cout << "Failed to decompress pixels! Exit.\n";
                             exit(-1);
                         }
+
+                        const int pixel_offset = header.width * header.num_frames * y_offset + i * header.width + x_offset;
 
                         for (int k = 0; k < width * height; k ++) {
-                            pixel_data[i][y * width + k] = pixels[k];
+                            int index = pixel_offset + k%width + floor(k / width) * header.width * header.num_frames;
+                            output->pixels[index] = pixels[k];
                         }
 
                         break;
@@ -272,19 +290,18 @@ Ase_Output AseLoad(std::string path) {
 
                     case TAGS: {
                         int size = GetU16(buffer_p + 6);
-                        tags = new Ase_Tag [size];
-                        std::cout << size << std::endl;
+                        output->tags = new Ase_Tag[size];
 
                         int tag_buffer_offset = 0;
                         for (int k = 0; k < size; k ++) {
 
-                            tags[k].from = GetU16(buffer_p + tag_buffer_offset + 16);
-                            tags[k].to = GetU16(buffer_p + tag_buffer_offset + 18);
+                            output->tags[k].from = GetU16(buffer_p + tag_buffer_offset + 16);
+                            output->tags[k].to = GetU16(buffer_p + tag_buffer_offset + 18);
 
                             int slen = GetU16(buffer_p + tag_buffer_offset + 33);
-                            tags[k].name = "";
+                            output->tags[k].name = "";
                             for (int a = 0; a < slen; a ++) {
-                                tags[k].name += *(buffer_p + tag_buffer_offset + a + 35);
+                                output->tags[k].name += *(buffer_p + tag_buffer_offset + a + 35);
                             }
 
                             tag_buffer_offset += 19 + slen;
@@ -302,7 +319,7 @@ Ase_Output AseLoad(std::string path) {
 
         }
 
-        Ase_Output output = {pixel_data, header.width, header.height, palette, tags, frame_durations};
+        file.close();
         return output;
 
 
@@ -310,4 +327,11 @@ Ase_Output AseLoad(std::string path) {
         std::cout << "file could not be loaded" << std::endl;
         exit(-1);
     }
+}
+
+inline void Ase_Destroy_Output(Ase_Output* output) {
+    delete [] output->pixels;
+    delete [] output->frame_durations;
+    delete [] output->tags;
+    delete output;
 }
