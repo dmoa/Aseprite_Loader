@@ -34,6 +34,9 @@ Chunks Supported:
         - No opacity support
     - PALETTE 0x2019
         - No name support
+    - SLICE 0x2022
+        - Does not support 9 patches or pivot flags
+        - Loads only first slice key
 
 
 - Only supports indexed color mode
@@ -52,6 +55,7 @@ Let me know if you want something added,
 #include <stdio.h>
 #include <fstream>
 #include <string>
+#include <vector>
 #include <math.h>
 #include <stdint.h>
 #include "decompressor.h"
@@ -149,7 +153,20 @@ struct Ase_Color {
 // but will need to change in the future as there won't always be 256 entries.
 struct Palette_Chunk {
     u32 num_entries;
+    u8 color_key;
     Ase_Color entries [256];
+};
+
+struct Rect {
+    int x;
+    int y;
+    int w;
+    int h;
+};
+
+struct Slice {
+    std::string name;
+    Rect quad;
 };
 
 struct Ase_Output {
@@ -158,10 +175,18 @@ struct Ase_Output {
     int frame_width;
     int frame_height;
     Palette_Chunk palette;
+
     Ase_Tag* tags;
+    int num_tags;
+
     u16* frame_durations;
     int num_frames;
+
+    Slice* slices;
+    u32 num_slices;
 };
+
+inline void Ase_Destroy_Output(Ase_Output* output);
 
 Ase_Output* Ase_Load(std::string path) {
 
@@ -175,6 +200,7 @@ Ase_Output* Ase_Load(std::string path) {
 
         char buffer [length];
         file.read(buffer, length);
+        file.close();
         char* buffer_p = & buffer[HEADER_SIZE];
 
         Ase_Header header = {
@@ -197,11 +223,19 @@ Ase_Output* Ase_Load(std::string path) {
         };
 
         Ase_Output* output = new Ase_Output();
+        output->pixels = new u8 [header.width * header.height * header.num_frames];
         output->frame_width  = header.width;
         output->frame_height = header.height;
-        output->num_frames   = header.num_frames;
-        output->pixels = new u8 [header.width * header.height * header.num_frames];
+        output->palette.color_key = header.palette_entry;
+
         output->frame_durations = new u16 [header.num_frames];
+        output->num_frames   = header.num_frames;
+
+        // Aseprite doesn't tell us upfront how many slices we're given,
+        // so there's no way really of creating the array of size X before
+        // we receive all the slices. Vector is used temporarily, but then
+        // converted into Slice* for output.
+        std::vector<Slice> temp_slices;
 
         // helps us with formulating output but not all data needed for output
         Ase_Frame frames [header.num_frames];
@@ -226,7 +260,8 @@ Ase_Output* Ase_Load(std::string path) {
 
             if (frames[i].magic_number != FRAME_MN) {
                 std::cout << "Frame " << i << " magic number not correct, corrupt file?" << std::endl;
-                exit(-1);
+                Ase_Destroy_Output(output);
+                return NULL;
             }
 
             buffer_p += FRAME_SIZE;
@@ -251,7 +286,8 @@ Ase_Output* Ase_Load(std::string path) {
 
                             if (GetU16(buffer_p + 26) == 1) {
                                 std::cout << "Name flag detected, cannot load! Color Index: " << k << std::endl;
-                                exit(-1);
+                                Ase_Destroy_Output(output);
+                                return NULL;
                             }
                             output->palette.entries[k] = {buffer_p[28 + k*6], buffer_p[29 + k*6], buffer_p[30 + k*6], buffer_p[31 + k*6]};
                         }
@@ -265,7 +301,8 @@ Ase_Output* Ase_Load(std::string path) {
 
                         if (cel_type != 2) {
                             std::cout << "Pixel format not supported! Exit.\n";
-                            exit(-1);
+                            Ase_Destroy_Output(output);
+                            return NULL;
                         }
 
                         u16 width  = GetU16(buffer_p + 22);
@@ -275,7 +312,8 @@ Ase_Output* Ase_Load(std::string path) {
                         unsigned int data_size = Decompressor_Feed(buffer_p + 26, 26 - chunk_size, pixels, width * height, true);
                         if (data_size == -1) {
                             std::cout << "Failed to decompress pixels! Exit.\n";
-                            exit(-1);
+                            Ase_Destroy_Output(output);
+                            return NULL;
                         }
 
                         const int pixel_offset = header.width * header.num_frames * y_offset + i * header.width + x_offset;
@@ -306,26 +344,57 @@ Ase_Output* Ase_Load(std::string path) {
 
                             tag_buffer_offset += 19 + slen;
                         }
+                        break;
+                    }
+                    case SLICE: {
+                        u32 num_keys = GetU32(buffer_p + 6);
+                        u32 flag = GetU32(buffer_p + 10);
+                        if (flag != 0) {
+                            std::cout << "Flag " << flag << " not supported! Asset: " << path;
+                            Ase_Destroy_Output(output);
+                            return NULL;
+                        }
+
+                        int slen = GetU16(buffer_p + 18);
+                        std::string name = "";
+                        for (int a = 0; a < slen; a++) {
+                            name += *(buffer_p + 20 + a);
+                        }
+
+                        // For now, we assume that the slice is the same
+                        // throughout all the frames, so we don't care about
+                        // the starting frame_number.
+                        // int frame_number = GetU32(buffer_p + 20 + slen);
+
+                        Rect quad = {
+                            (s32) GetU32(buffer_p + slen + 24),
+                            (s32) GetU32(buffer_p + slen + 28),
+                            GetU32(buffer_p + slen + 32),
+                            GetU32(buffer_p + slen + 36)
+                        };
+
+                        temp_slices.push_back({name, quad});
 
                         break;
                     }
-
                     default: break;
                 }
-
                 buffer_p += chunk_size;
             }
-
-
         }
 
-        file.close();
+        output->slices = new Slice [temp_slices.size()];
+        for (int i = 0; i < temp_slices.size(); i ++) {
+            output->slices[i] = temp_slices[i];
+        }
+        output->num_slices = temp_slices.size();
+
         return output;
 
 
     } else {
         std::cout << "file could not be loaded" << std::endl;
-        exit(-1);
+        return NULL;
     }
 }
 
@@ -333,5 +402,6 @@ inline void Ase_Destroy_Output(Ase_Output* output) {
     delete [] output->pixels;
     delete [] output->frame_durations;
     delete [] output->tags;
+    delete [] output->slices;
     delete output;
 }
