@@ -2,27 +2,25 @@
 Aseprite Loader
 Copyright © 2020 Stan O
 
-* Permission is granted to anyone to use this software
-* for any purpose, including commercial applications,
-* and to alter it and redistribute it freely, subject to
-* the following restrictions:
-*
-* 1. The origin of this software must not be
-*    misrepresented; you must not claim that you
-*    wrote the original software. If you use this
-*    software in a product, an acknowledgment in
-*    the product documentation would be appreciated
-*    but is not required.
-*
-* 2. Altered source versions must be plainly marked
-*    as such, and must not be misrepresented as
-*    being the original software.
-*
-* 3. This notice may not be removed or altered from
-*    any source distribution.
+MIT License
 
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 Parses:
     - All header data
@@ -102,6 +100,7 @@ inline u32 GetU32(void* memory) {
 #define USER_DATA 0x2020
 #define SLICE 0x2022
 
+#define INDEX_FORMAT 2 // indexed color format flag
 
 struct Ase_Header {
     u32 file_size;
@@ -195,13 +194,15 @@ Ase_Output* Ase_Load(std::string path) {
     if (file) {
 
         file.seekg(0, file.end);
-        const int length = file.tellg();
-        file.seekg(0, std::ios::beg);
+        const int file_size = file.tellg();
 
-        char buffer [length];
-        file.read(buffer, length);
-        file.close();
+        char buffer [file_size];
         char* buffer_p = & buffer[HEADER_SIZE];
+
+        // transfer data from file into buffer and close file
+        file.seekg(0, std::ios::beg);
+        file.read(buffer, file_size);
+        file.close();
 
         Ase_Header header = {
             GetU32(& buffer[0]),
@@ -237,7 +238,7 @@ Ase_Output* Ase_Load(std::string path) {
         // converted into Slice* for output.
         std::vector<Slice> temp_slices;
 
-        // helps us with formulating output but not all data needed for output
+        // This helps us with formulating output but not all frame data is needed for output.
         Ase_Frame frames [header.num_frames];
 
         // fill the pixel indexes in the frame with transparent color index
@@ -245,8 +246,8 @@ Ase_Output* Ase_Load(std::string path) {
             output->pixels[i] = header.palette_entry;
         }
 
+        // Each frame may have multiple chunks, so we first get frame data, then iterate over all the chunks that the frame has.
         for (int i = 0; i < header.num_frames; i++) {
-
 
             frames[i] = {
                 GetU32(buffer_p),
@@ -255,7 +256,6 @@ Ase_Output* Ase_Load(std::string path) {
                 GetU16(buffer_p + 8),
                 GetU32(buffer_p + 12)
             };
-
             output->frame_durations[i] = frames[i].frame_duration;
 
             if (frames[i].magic_number != FRAME_MN) {
@@ -265,7 +265,6 @@ Ase_Output* Ase_Load(std::string path) {
             }
 
             buffer_p += FRAME_SIZE;
-
 
             for (int j = 0; j < frames[i].new_num_chunks; j++) {
 
@@ -277,13 +276,14 @@ Ase_Output* Ase_Load(std::string path) {
                     case PALETTE: {
 
                         output->palette.num_entries = GetU32(buffer_p + 6);
-                        // Specifies the range of unique colors in the palette.
+                        // specifies the range of unique colors in the palette
                         // There may be many repeated colors, so range -> efficient.
                         u32 first_to_change = GetU32(buffer_p + 10);
                         u32  last_to_change = GetU32(buffer_p + 14);
 
                         for (int k = first_to_change; k < last_to_change; k++) {
 
+                            // We do not support color data with strings in it. Flag 1 means there's a name.
                             if (GetU16(buffer_p + 26) == 1) {
                                 std::cout << "Name flag detected, cannot load! Color Index: " << k << std::endl;
                                 Ase_Destroy_Output(output);
@@ -295,11 +295,12 @@ Ase_Output* Ase_Load(std::string path) {
                     }
 
                     case CEL: {
+
                         s16 x_offset = GetU16(buffer_p + 8);
                         s16 y_offset = GetU16(buffer_p + 10);
                         u16 cel_type = GetU16(buffer_p + 13);
 
-                        if (cel_type != 2) {
+                        if (cel_type != INDEX_FORMAT) {
                             std::cout << "Pixel format not supported! Exit.\n";
                             Ase_Destroy_Output(output);
                             return NULL;
@@ -316,6 +317,7 @@ Ase_Output* Ase_Load(std::string path) {
                             return NULL;
                         }
 
+                        // transforming array of pixels onto larger array of pixels
                         const int pixel_offset = header.width * header.num_frames * y_offset + i * header.width + x_offset;
 
                         for (int k = 0; k < width * height; k ++) {
@@ -327,15 +329,17 @@ Ase_Output* Ase_Load(std::string path) {
                     }
 
                     case TAGS: {
-                        int size = GetU16(buffer_p + 6);
-                        output->tags = new Ase_Tag[size];
+                        int num_tags = GetU16(buffer_p + 6);
+                        output->tags = new Ase_Tag[num_tags];
 
+                        // iterate over each tag and append data to output->tags
                         int tag_buffer_offset = 0;
-                        for (int k = 0; k < size; k ++) {
+                        for (int k = 0; k < num_tags; k ++) {
 
                             output->tags[k].from = GetU16(buffer_p + tag_buffer_offset + 16);
                             output->tags[k].to = GetU16(buffer_p + tag_buffer_offset + 18);
 
+                            // get string
                             int slen = GetU16(buffer_p + tag_buffer_offset + 33);
                             output->tags[k].name = "";
                             for (int a = 0; a < slen; a ++) {
@@ -355,6 +359,7 @@ Ase_Output* Ase_Load(std::string path) {
                             return NULL;
                         }
 
+                        // get string
                         int slen = GetU16(buffer_p + 18);
                         std::string name = "";
                         for (int a = 0; a < slen; a++) {
@@ -383,6 +388,7 @@ Ase_Output* Ase_Load(std::string path) {
             }
         }
 
+        // convert vector to array for output
         output->slices = new Slice [temp_slices.size()];
         for (int i = 0; i < temp_slices.size(); i ++) {
             output->slices[i] = temp_slices[i];
