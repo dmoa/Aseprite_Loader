@@ -329,12 +329,12 @@ Ase_Output* Ase_Load(std::string path) {
                     }
 
                     case TAGS: {
-                        int num_tags = GetU16(buffer_p + 6);
-                        output->tags = new Ase_Tag[num_tags];
+                        output->num_tags = GetU16(buffer_p + 6);;
+                        output->tags = new Ase_Tag[output->num_tags];
 
                         // iterate over each tag and append data to output->tags
                         int tag_buffer_offset = 0;
-                        for (int k = 0; k < num_tags; k ++) {
+                        for (int k = 0; k < output->num_tags; k ++) {
 
                             output->tags[k].from = GetU16(buffer_p + tag_buffer_offset + 16);
                             output->tags[k].to = GetU16(buffer_p + tag_buffer_offset + 18);
