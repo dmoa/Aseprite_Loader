@@ -223,6 +223,11 @@ Ase_Output* Ase_Load(std::string path) {
             GetU16(& buffer[42])
         };
 
+        if (header.color_depth != 8) {
+            printf("%s: Not in indexed color mode. Only indexed color mode supported.\n", path.c_str());
+            return NULL;
+        }
+
         Ase_Output* output = new Ase_Output();
         output->pixels = new u8 [header.width * header.height * header.num_frames];
         output->frame_width  = header.width;
@@ -259,7 +264,7 @@ Ase_Output* Ase_Load(std::string path) {
             output->frame_durations[i] = frames[i].frame_duration;
 
             if (frames[i].magic_number != FRAME_MN) {
-                std::cout << "Frame " << i << " magic number not correct, corrupt file?" << std::endl;
+                printf("%s: Frame %i magic number not correct, corrupt file?\n", path.c_str(), i);
                 Ase_Destroy_Output(output);
                 return NULL;
             }
@@ -285,7 +290,7 @@ Ase_Output* Ase_Load(std::string path) {
 
                             // We do not support color data with strings in it. Flag 1 means there's a name.
                             if (GetU16(buffer_p + 26) == 1) {
-                                std::cout << "Name flag detected, cannot load! Color Index: " << k << std::endl;
+                                printf("%s: Name flag detected, cannot load! Color Index: %i.\n", path.c_str(), k);
                                 Ase_Destroy_Output(output);
                                 return NULL;
                             }
@@ -301,7 +306,7 @@ Ase_Output* Ase_Load(std::string path) {
                         u16 cel_type = GetU16(buffer_p + 13);
 
                         if (cel_type != INDEX_FORMAT) {
-                            std::cout << "Pixel format not supported! Exit.\n";
+                            printf("%s: Pixel format not supported!\n", path.c_str());
                             Ase_Destroy_Output(output);
                             return NULL;
                         }
@@ -312,7 +317,7 @@ Ase_Output* Ase_Load(std::string path) {
 
                         unsigned int data_size = Decompressor_Feed(buffer_p + 26, 26 - chunk_size, pixels, width * height, true);
                         if (data_size == -1) {
-                            std::cout << "Failed to decompress pixels! Exit.\n";
+                            printf("%s: Pixel format not supported!\n", path.c_str());
                             Ase_Destroy_Output(output);
                             return NULL;
                         }
@@ -354,7 +359,7 @@ Ase_Output* Ase_Load(std::string path) {
                         u32 num_keys = GetU32(buffer_p + 6);
                         u32 flag = GetU32(buffer_p + 10);
                         if (flag != 0) {
-                            std::cout << "Flag " << flag << " not supported! Asset: " << path;
+                            printf("%s: Flag %i not supported!\n", path.c_str(), flag);
                             Ase_Destroy_Output(output);
                             return NULL;
                         }
@@ -399,7 +404,7 @@ Ase_Output* Ase_Load(std::string path) {
 
 
     } else {
-        std::cout << "file could not be loaded" << std::endl;
+        printf("%s: File could not be loaded.\n", path.c_str());
         return NULL;
     }
 }
