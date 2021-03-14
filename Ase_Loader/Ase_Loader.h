@@ -286,7 +286,7 @@ Ase_Output* Ase_Load(std::string path) {
                         u32 first_to_change = GetU32(buffer_p + 10);
                         u32  last_to_change = GetU32(buffer_p + 14);
 
-                        for (int k = first_to_change; k < last_to_change; k++) {
+                        for (int k = first_to_change; k < last_to_change + 1; k++) {
 
                             // We do not support color data with strings in it. Flag 1 means there's a name.
                             if (GetU16(buffer_p + 26) == 1) {
