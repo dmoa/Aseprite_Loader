@@ -157,10 +157,10 @@ struct Palette_Chunk {
 };
 
 struct Rect {
-    int x;
-    int y;
-    int w;
-    int h;
+    u32 x;
+    u32 y;
+    u32 w;
+    u32 h;
 };
 
 struct Slice {
@@ -171,15 +171,15 @@ struct Slice {
 struct Ase_Output {
     Ase_Output() {}; // c++ bullshit makes me define an empty constructor...
     u8* pixels;
-    int frame_width;
-    int frame_height;
+    u16 frame_width;
+    u16 frame_height;
     Palette_Chunk palette;
 
     Ase_Tag* tags;
-    int num_tags;
+    u16 num_tags;
 
     u16* frame_durations;
-    int num_frames;
+    u16 num_frames;
 
     Slice* slices;
     u32 num_slices;
@@ -252,7 +252,7 @@ Ase_Output* Ase_Load(std::string path) {
         }
 
         // Each frame may have multiple chunks, so we first get frame data, then iterate over all the chunks that the frame has.
-        for (int i = 0; i < header.num_frames; i++) {
+        for (u16 i = 0; i < header.num_frames; i++) {
 
             frames[i] = {
                 GetU32(buffer_p),
@@ -271,7 +271,7 @@ Ase_Output* Ase_Load(std::string path) {
 
             buffer_p += FRAME_SIZE;
 
-            for (int j = 0; j < frames[i].new_num_chunks; j++) {
+            for (u32 j = 0; j < frames[i].new_num_chunks; j++) {
 
                 u32 chunk_size = GetU32(buffer_p);
                 u16 chunk_type = GetU16(buffer_p + 4);
@@ -286,7 +286,7 @@ Ase_Output* Ase_Load(std::string path) {
                         u32 first_to_change = GetU32(buffer_p + 10);
                         u32  last_to_change = GetU32(buffer_p + 14);
 
-                        for (int k = first_to_change; k < last_to_change + 1; k++) {
+                        for (u32 k = first_to_change; k < last_to_change + 1; k++) {
 
                             // We do not support color data with strings in it. Flag 1 means there's a name.
                             if (GetU16(buffer_p + 26) == 1) {
@@ -339,15 +339,15 @@ Ase_Output* Ase_Load(std::string path) {
 
                         // iterate over each tag and append data to output->tags
                         int tag_buffer_offset = 0;
-                        for (int k = 0; k < output->num_tags; k ++) {
+                        for (u16 k = 0; k < output->num_tags; k ++) {
 
                             output->tags[k].from = GetU16(buffer_p + tag_buffer_offset + 16);
                             output->tags[k].to = GetU16(buffer_p + tag_buffer_offset + 18);
 
                             // get string
-                            int slen = GetU16(buffer_p + tag_buffer_offset + 33);
+                            u16 slen = GetU16(buffer_p + tag_buffer_offset + 33);
                             output->tags[k].name = "";
-                            for (int a = 0; a < slen; a ++) {
+                            for (u16 a = 0; a < slen; a ++) {
                                 output->tags[k].name += *(buffer_p + tag_buffer_offset + a + 35);
                             }
 
@@ -365,9 +365,9 @@ Ase_Output* Ase_Load(std::string path) {
                         }
 
                         // get string
-                        int slen = GetU16(buffer_p + 18);
+                        u16 slen = GetU16(buffer_p + 18);
                         std::string name = "";
-                        for (int a = 0; a < slen; a++) {
+                        for (u16 a = 0; a < slen; a++) {
                             name += *(buffer_p + 20 + a);
                         }
 
@@ -395,6 +395,8 @@ Ase_Output* Ase_Load(std::string path) {
 
         // convert vector to array for output
         output->slices = new Slice [temp_slices.size()];
+
+        // We do "int i" instead of u8 / u16 / u32... because we don't know how many slices there are upfront :(
         for (int i = 0; i < temp_slices.size(); i ++) {
             output->slices[i] = temp_slices[i];
         }
