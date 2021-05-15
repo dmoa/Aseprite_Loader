@@ -36,6 +36,17 @@ SDL_Texture* LoadTest(std::string str) {
     SDL_SetPaletteColors(surface->format->palette, (SDL_Color*) & o->palette.entries, 0, o->palette.num_entries);
     SDL_SetColorKey(surface, SDL_TRUE, o->palette.color_key);
 
+    print("printing ase data:");
+
+    for (int i = 0; i < o->num_tags; i++) {
+        print(o->tags[i].name);
+    }
+    for (int i = 0; i < o->num_slices; i++) {
+        print(o->slices[i].name);
+    }
+
+    Ase_Destroy_Output(o);
+
     SDL_Texture* texture = SDL_CreateTextureFromSurface(w_renderer, surface);
     if (! texture) print("Texture could not be created!, %s:");
     SDL_FreeSurface(surface);
@@ -48,7 +59,7 @@ int main(int argc, char* argv[]) {
     SDL_Init(SDL_INIT_EVERYTHING);
     IMG_Init(IMG_INIT_PNG);
 
-    SDL_Window* window = SDL_CreateWindow("Test", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 1600, 800, SDL_WINDOW_SHOWN);
+    SDL_Window* window = SDL_CreateWindow("Test", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 1600, 800, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
     w_renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
     const int scale = 4;
     SDL_RenderSetScale(w_renderer, scale, scale);
@@ -70,8 +81,10 @@ int main(int argc, char* argv[]) {
                             quit = true;
                             break;
                         case SDLK_r:
-                            SDL_DestroyTexture(test_texture);
-                            test_texture = LoadTest("test.ase");
+                            for (int i = 0; i < 100000; i++) {
+                                SDL_DestroyTexture(test_texture);
+                                test_texture = LoadTest("test.ase");
+                            }
                             break;
                         default: break;
                     }
