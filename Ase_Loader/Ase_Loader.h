@@ -81,6 +81,9 @@ inline u32 GetU32(void* memory) {
 		   (((u32)p[0]));
 }
 
+#define bmalloc(t) (t*)(malloc(sizeof(t)))
+#define bmalloc_arr(t,n) (t*)(malloc(sizeof(t)*n))
+
 #define HEADER_MN 0xA5E0
 #define FRAME_MN 0xF1FA
 
@@ -120,8 +123,8 @@ struct Ase_Header {
 
 
     // Rendered grid for aseprite, not for asset loading.
-    s16  x_grid;
-    s16  y_grid;
+    s16 x_grid;
+    s16 y_grid;
     u16 grid_width;
     u16 grid_height;
 };
@@ -137,7 +140,7 @@ struct Ase_Frame {
 struct Ase_Tag {
     u16 from;
     u16 to;
-    std::string name;
+    char* name;
 };
 
 // delete and replace with SDL_Color if using SDL
@@ -164,12 +167,11 @@ struct Rect {
 };
 
 struct Slice {
-    std::string name;
+    char* name;
     Rect quad;
 };
 
 struct Ase_Output {
-    Ase_Output() {}; // c++ bullshit makes me define an empty constructor...
     u8* pixels;
     u16 frame_width;
     u16 frame_height;
@@ -228,13 +230,13 @@ Ase_Output* Ase_Load(std::string path) {
             return NULL;
         }
 
-        Ase_Output* output = new Ase_Output();
-        output->pixels = new u8 [header.width * header.height * header.num_frames];
+        Ase_Output* output = bmalloc(Ase_Output);
+        output->pixels = bmalloc_arr(u8, header.width * header.height * header.num_frames);
         output->frame_width  = header.width;
         output->frame_height = header.height;
         output->palette.color_key = header.palette_entry;
 
-        output->frame_durations = new u16 [header.num_frames];
+        output->frame_durations = bmalloc_arr(u16, header.num_frames);
         output->num_frames   = header.num_frames;
 
         // Aseprite doesn't tell us upfront how many slices we're given,
@@ -335,7 +337,7 @@ Ase_Output* Ase_Load(std::string path) {
 
                     case TAGS: {
                         output->num_tags = GetU16(buffer_p + 6);;
-                        output->tags = new Ase_Tag[output->num_tags];
+                        output->tags = bmalloc_arr(Ase_Tag, output->num_tags);
 
                         // iterate over each tag and append data to output->tags
                         int tag_buffer_offset = 0;
@@ -346,10 +348,12 @@ Ase_Output* Ase_Load(std::string path) {
 
                             // get string
                             u16 slen = GetU16(buffer_p + tag_buffer_offset + 33);
-                            output->tags[k].name = "";
-                            for (u16 a = 0; a < slen; a ++) {
-                                output->tags[k].name += *(buffer_p + tag_buffer_offset + a + 35);
+                            output->tags[k].name = (char*) malloc(sizeof(char) * (slen + 1)); // slen + 1 because we need to make it a null terminating string
+
+                            for (u16 a = 0; a < slen; a++) {
+                                output->tags[k].name[a] = *(buffer_p + tag_buffer_offset + a + 35);
                             }
+                            output->tags[k].name[slen] = '\0';
 
                             tag_buffer_offset += 19 + slen;
                         }
@@ -366,10 +370,12 @@ Ase_Output* Ase_Load(std::string path) {
 
                         // get string
                         u16 slen = GetU16(buffer_p + 18);
-                        std::string name = "";
+                        char* name = bmalloc_arr(char, slen + 1);
+
                         for (u16 a = 0; a < slen; a++) {
-                            name += *(buffer_p + 20 + a);
+                            name[a] = *(buffer_p + a + 20);
                         }
+                        name[slen] = '\0';
 
                         // For now, we assume that the slice is the same
                         // throughout all the frames, so we don't care about
@@ -394,7 +400,7 @@ Ase_Output* Ase_Load(std::string path) {
         }
 
         // convert vector to array for output
-        output->slices = new Slice [temp_slices.size()];
+        output->slices = bmalloc_arr(Slice, temp_slices.size());
 
         // We do "int i" instead of u8 / u16 / u32... because we don't know how many slices there are upfront :(
         for (int i = 0; i < temp_slices.size(); i ++) {
@@ -412,9 +418,17 @@ Ase_Output* Ase_Load(std::string path) {
 }
 
 inline void Ase_Destroy_Output(Ase_Output* output) {
-    delete [] output->pixels;
-    delete [] output->frame_durations;
-    delete [] output->tags;
-    delete [] output->slices;
-    delete output;
+    free(output->pixels);
+    free(output->frame_durations);
+
+    for (int i = 0; i < output->num_tags; i++) {
+        free(output->tags[i].name);
+    }
+    for (int i = 0; i < output->num_slices; i++) {
+        free(output->slices[i].name);
+    }
+
+    free(output->tags);
+    free(output->slices);
+    free(output);
 }
