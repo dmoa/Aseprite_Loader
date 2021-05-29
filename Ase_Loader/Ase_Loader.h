@@ -232,12 +232,20 @@ Ase_Output* Ase_Load(std::string path) {
 
         Ase_Output* output = bmalloc(Ase_Output);
         output->pixels = bmalloc_arr(u8, header.width * header.height * header.num_frames);
-        output->frame_width  = header.width;
+        output->frame_width = header.width;
         output->frame_height = header.height;
         output->palette.color_key = header.palette_entry;
 
         output->frame_durations = bmalloc_arr(u16, header.num_frames);
-        output->num_frames   = header.num_frames;
+        output->num_frames = header.num_frames;
+
+        // Because we are using malloc, we cannot use default values in struct because
+        // the memory that we are given has garbage values, so we have to manually set
+        // the values here.
+        output->tags = NULL;
+        output->num_tags = 0;
+        output->slices = NULL;
+        output->num_slices = 0;
 
         // Aseprite doesn't tell us upfront how many slices we're given,
         // so there's no way really of creating the array of size X before
@@ -418,6 +426,7 @@ Ase_Output* Ase_Load(std::string path) {
 }
 
 inline void Ase_Destroy_Output(Ase_Output* output) {
+
     free(output->pixels);
     free(output->frame_durations);
 
@@ -428,7 +437,10 @@ inline void Ase_Destroy_Output(Ase_Output* output) {
         free(output->slices[i].name);
     }
 
+    // There are cases where memory is never allocated for these fyi.
     free(output->tags);
     free(output->slices);
+    //
+
     free(output);
 }
