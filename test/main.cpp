@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <time.h>
+#include <thread>
 #include <string>
 #include <SDL2/SDL.h>
 
@@ -14,62 +15,112 @@
 #endif
 
 #define print SDL_Log
-
 // In order to view Ase_Loader.h logs
 #undef printf
 #define printf SDL_Log
 
 #include "../Ase_Loader/Ase_Loader.h"
 
+struct EngineClock {
+    // dt
+    float last_tick_time = 0;
 
-SDL_Renderer* w_renderer;
-inline void DrawTexture(SDL_Texture* texture) {
-    SDL_Rect drect = {0, 0, 0, 0};
-    SDL_QueryTexture(texture, NULL, NULL, & drect.w, & drect.h);
-    SDL_RenderCopy(w_renderer, texture, NULL, & drect);
-}
+    // for average fps
+    float fpss [ACCURACY];
+    int fpss_index = -1;
+    int average_fps = -1;
 
-SDL_Texture* LoadTest(std::string str) {
-    Ase_Output* o = Ase_Load(str);
-    SDL_Surface* surface = SDL_CreateRGBSurfaceWithFormatFrom(o->pixels, o->frame_width * o->num_frames, o->frame_height, 8, o->frame_width * o->num_frames, SDL_PIXELFORMAT_INDEX8);
-    if (! surface) print("Surface could not be created!, %s\n", SDL_GetError());
-    SDL_SetPaletteColors(surface->format->palette, (SDL_Color*) & o->palette.entries, 0, o->palette.num_entries);
-    SDL_SetColorKey(surface, SDL_TRUE, o->palette.color_key);
-
-    print("printing ase data:");
-
-    for (int i = 0; i < o->num_tags; i++) {
-        print(o->tags[i].name);
+    void tick() {
+        float tick_time = SDL_GetTicks();
+        g_dt = (tick_time - last_tick_time) / 1000;
+        last_tick_time = tick_time;
     }
-    for (int i = 0; i < o->num_slices; i++) {
-        print(o->slices[i].name);
-    }
+};
 
-    Ase_Destroy_Output(o);
+struct Graphics {
+    SDL_Window* window;
+    SDL_Renderer* rdr;
+};
 
-    SDL_Texture* texture = SDL_CreateTextureFromSurface(w_renderer, surface);
-    if (! texture) print("Texture could not be created!, %s:");
-    SDL_FreeSurface(surface);
+struct Test {
+    SDL_Texture* texture = NULL;
+    Ase_Output* ase_output = NULL;
+    // For when we're in graphics mode
+    bool quit = false;
+};
 
-    return texture;
-}
+
+void GraphicsLaunch();
+void GraphicsShutdown();
+bool WindowThread();
+
 
 int main(int argc, char* argv[]) {
 
+    print("%i", argc);
+    print(argv[0]);
+
+    bool graphics_mode = false;
+
+    if (argc > 1) {
+        if (strcmp(argv[1], "graphic") != 0) {
+            graphics_mode = true;
+        }
+        else {
+            print("Invalid arg. Available: graphic");
+        }
+    }
+
+    Test test_data;
+
+    if (graphics_mode) {
+
+        std::thread test_thread(Test, & test_data);
+
+        Graphics g;
+        GraphicsLaunch(& g);
+        GraphicsLoop(& g, & test_data, & test_thread);
+    }
+    else {
+        Test(& test_data);
+    }
+
+    return 0;
+}
+
+void Test(Test* test_data) {
+    while (true) {
+        if (test_data->quit) {
+            print("exiting test loop!");
+            break;
+        }
+    }
+}
+
+void GraphicsLaunch(Graphics* g) {
     SDL_Init(SDL_INIT_EVERYTHING);
     IMG_Init(IMG_INIT_PNG);
 
-    SDL_Window* window = SDL_CreateWindow("Test", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 1600, 800, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
-    w_renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+    g->window = SDL_CreateWindow("Test", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 1600, 800, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
+    g->rdr = SDL_CreateRenderer(g->window, -1, SDL_RENDERER_ACCELERATED);
     const int scale = 4;
-    SDL_RenderSetScale(w_renderer, scale, scale);
+    SDL_RenderSetScale(g->rdr, scale, scale);
+}
 
-    SDL_Texture* test_texture = LoadTest("test.ase");
+void GraphicsShutdown() {
+    SDL_DestroyTexture(test_texture);
+    SDL_DestroyWindow(window);
+    IMG_Quit();
+    SDL_Quit();
+}
 
-    SDL_Event event;
+void GraphicsLoop(Graphics* g, Test* test_data) {
+
     bool quit = false;
-    while (!quit) {
 
+    while (! quit) {
+
+        SDL_Event event;
         while (SDL_PollEvent(& event)) {
 
             switch (event.type) {
@@ -80,26 +131,25 @@ int main(int argc, char* argv[]) {
                         case SDLK_ESCAPE:
                             quit = true;
                             break;
-                        case SDLK_r:
-                            for (int i = 0; i < 100000; i++) {
-                                SDL_DestroyTexture(test_texture);
-                                test_texture = LoadTest("test.ase");
-                            }
-                            break;
                         default: break;
                     }
                 default: break;
             }
         }
 
-        SDL_RenderClear(w_renderer);
-        DrawTexture(test_texture);
-        SDL_RenderPresent(w_renderer);
+        // Draw the test texture if it actually exists
+        if (test_data->texture != NULL) {
+            SDL_RenderClear(g->rdr);
+            SDL_Rect drect = {0, 0, 0, 0};
+            SDL_QueryTexture(test_data->texture, NULL, NULL, & drect.w, & drect.h);
+            SDL_RenderCopy(g->rdr, test_data->texture, NULL, & drect);
+        }
     }
 
-    SDL_DestroyTexture(test_texture);
-    SDL_DestroyWindow(window);
-    IMG_Quit();
-    SDL_Quit();
-    return 0;
+    // If we exit the program before the tests are done, there's a chance that we'll exit while there's a texture that hasn't been freed.
+    // If we free the texture here and it's already been freed, SDL ignores it (the null pointer) and moves on :D.
+    SDL_DestroyTexture(test_data->texture);
+    Ase_Destroy_Output(test_data->ase_output);
+
+    GraphicsShutdown();
 }
