@@ -1,5 +1,7 @@
 #pragma once
 
+#include <iostream>
+
 #include <SDL2/SDL.h>
 
 #ifdef _WIN32
@@ -43,13 +45,13 @@ struct Test {
 };
 
 struct TestIter {
-    SDL_Texture* texture = NULL;
-    Ase_Output* ase_output = NULL;
+    Ase_Output* ase = NULL;
     int i = 0; // index
 };
 
 
-void RunIthTest(TestIter* test_iter, Test* tests);
+void StartIthTest(TestIter* test_iter, Test* tests);
+void FinishIthTest(TestIter* test_iter);
 void GraphicsLaunch(Graphics* g);
 void GraphicsShutdown(Graphics* g);
 bool EventLoop();
@@ -70,7 +72,11 @@ int main(int argc, char* argv[]) {
 
 
     Test tests [] = {
-        {"tests/slices_1.ase", 2}
+        {"tests/slices_1.ase", 2},
+        {"tests/2.ase", 0},
+        {"tests/3.ase", 0},
+        {"tests/4.ase", 0},
+        {"tests/5.ase", 0}
     };
     TestIter test_iter;
     int num_tests = sizeof(tests) / sizeof(tests[0]);
@@ -80,32 +86,42 @@ int main(int argc, char* argv[]) {
 
         Graphics g;
         GraphicsLaunch(& g);
+        SDL_Texture* test_texture = NULL;
 
         for (; test_iter.i < num_tests; test_iter.i++) {
 
-            RunIthTest(& test_iter, & tests[0]);
+            StartIthTest(& test_iter, & tests[0]);
+
+            SDL_Surface* surface = SDL_CreateRGBSurfaceWithFormatFrom(test_iter.ase->pixels, test_iter.ase->frame_width * test_iter.ase->num_frames, test_iter.ase->frame_height, 8, test_iter.ase->frame_width * test_iter.ase->num_frames, SDL_PIXELFORMAT_INDEX8);
+            if (! surface) print("Surface could not be created!, %s\n", SDL_GetError());
+            SDL_SetPaletteColors(surface->format->palette, (SDL_Color*) & test_iter.ase->palette.entries, 0, test_iter.ase->palette.num_entries);
+            SDL_SetColorKey(surface, SDL_TRUE, test_iter.ase->palette.color_key);
+
+            test_texture = SDL_CreateTextureFromSurface(g.rdr, surface);
+
+            FinishIthTest(& test_iter);
 
             // Draw the test texture if it actually exists
             // (checking != NULL on the off chance that a test failes miserably and the texture also fails to load)
-            if (test_iter.texture != NULL) {
+            if (test_texture != NULL) {
                 SDL_RenderClear(g.rdr);
                 SDL_Rect drect = {0, 0, 0, 0};
-                SDL_QueryTexture(test_iter.texture, NULL, NULL, & drect.w, & drect.h);
-                SDL_RenderCopy(g.rdr, test_iter.texture, NULL, & drect);
+                SDL_QueryTexture(test_texture, NULL, NULL, & drect.w, & drect.h);
+                SDL_RenderCopy(g.rdr, test_texture, NULL, & drect);
+                SDL_RenderPresent(g.rdr);
 
-                SDL_DestroyTexture(test_iter.texture);
+                // If we're on the last test, then keep the texture up on the screen.
+                if (test_iter.i < num_tests - 1) SDL_DestroyTexture(test_texture);
             }
 
             // If we get an input that we want to quit the program, we do as so.
-
-            // We don't need to free any test related stuff here because we should have freed all ase_loader
-            // related things in Test(), And freed the texture in the if statement above if needed.
             if (EventLoop()) {
+                SDL_DestroyTexture(test_texture);
                 GraphicsShutdown(& g);
-                break;
+                return 0;
             }
 
-            SDL_Delay(100);
+            SDL_Delay(300);
         }
 
         // This lets us have the window open even after we finish all the tests.
@@ -113,6 +129,7 @@ int main(int argc, char* argv[]) {
         // specific tests in the future.
         while (true) {
             if (EventLoop()) {
+                SDL_DestroyTexture(test_texture);
                 GraphicsShutdown(& g);
                 break;
             }
@@ -123,7 +140,8 @@ int main(int argc, char* argv[]) {
     //////// NON-GRAPHICS MODE ////////
     else {
         for (; test_iter.i < num_tests; test_iter.i++) {
-            RunIthTest(& test_iter, & tests[0]);
+            StartIthTest(& test_iter, & tests[0]);
+            FinishIthTest(& test_iter);
         }
     }
 
@@ -133,15 +151,21 @@ int main(int argc, char* argv[]) {
 // Tests the ith test.
 // The only thing it doesn't do is SDL_DestroyTexture, because when we are in graphics mode
 // we want to wait until we draw the texture to the screen before we destroy it.
-void RunIthTest(TestIter* test_iter, Test* tests) {
+void StartIthTest(TestIter* test_iter, Test* tests) {
+
+    test_iter->ase = Ase_Load(tests[test_iter->i].file_path);
     print("Test %i %s", test_iter->i, tests[test_iter->i].file_path);
+}
+
+void FinishIthTest(TestIter* test_iter) {
+    Ase_Destroy_Output(test_iter->ase);
 }
 
 void GraphicsLaunch(Graphics* g) {
     SDL_Init(SDL_INIT_EVERYTHING);
     IMG_Init(IMG_INIT_PNG);
 
-    g->window = SDL_CreateWindow("Test", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 1600, 800, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
+    g->window = SDL_CreateWindow("Test", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 800, 800, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
     g->rdr = SDL_CreateRenderer(g->window, -1, SDL_RENDERER_ACCELERATED);
     const int scale = 4;
     SDL_RenderSetScale(g->rdr, scale, scale);
