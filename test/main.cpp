@@ -72,11 +72,10 @@ int main(int argc, char* argv[]) {
 
 
     Test tests [] = {
-        {"tests/slices_1.ase", 2},
-        {"tests/2.ase", 0},
-        {"tests/3.ase", 0},
-        {"tests/4.ase", 0},
-        {"tests/5.ase", 0}
+        {"tests/1_no_slices.ase", 0},
+        {"tests/2.1_no_slices.ase", 0},
+        {"tests/2.2_no_slices_animated.ase", 0},
+        {"tests/3_one_slice.ase", 1},
     };
     TestIter test_iter;
     int num_tests = sizeof(tests) / sizeof(tests[0]);
@@ -154,7 +153,19 @@ int main(int argc, char* argv[]) {
 void StartIthTest(TestIter* test_iter, Test* tests) {
 
     test_iter->ase = Ase_Load(tests[test_iter->i].file_path);
-    print("Test %i %s", test_iter->i, tests[test_iter->i].file_path);
+
+    u32 expected = tests[test_iter->i].num_slices;
+    u32 actual = test_iter->ase->num_slices;
+
+    bool success = expected == actual;
+
+    if (success) {
+        print("Test %i %s | PASSED", test_iter->i, tests[test_iter->i].file_path);
+    }
+    else {
+        print("Test %i %s | FAILED | Expected %i, Got %i", test_iter->i, tests[test_iter->i].file_path, expected, actual);
+    }
+
 }
 
 void FinishIthTest(TestIter* test_iter) {
