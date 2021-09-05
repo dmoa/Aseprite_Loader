@@ -40,8 +40,8 @@ struct Graphics {
 
 // Expected results
 struct Test {
-    char* file_path;
-    u32 num_slices;
+    char* file_path = NULL;
+    u32 num_slices = 0;
 };
 
 struct TestIter {
@@ -72,11 +72,14 @@ int main(int argc, char* argv[]) {
 
 
     Test tests [] = {
-        {"tests/1_no_slices.ase", 0},
+        {"tests/1_no_slices_blank.ase", 0},
+        {"tests/1.1_no_slices.ase", 0},
         {"tests/2.1_no_slices.ase", 0},
         {"tests/2.2_no_slices_animated.ase", 0},
-        {"tests/3_one_slice.ase", 1},
-    };
+        {"tests/3.1_seven_slices_blank.ase", 7},
+        {"tests/3.0_one_slice.ase", 1},
+        {"tests/3.2_animated_two_slices.ase", 2}
+	};
     TestIter test_iter;
     int num_tests = sizeof(tests) / sizeof(tests[0]);
 
@@ -133,7 +136,6 @@ int main(int argc, char* argv[]) {
                 break;
             }
         }
-
     }
 
     //////// NON-GRAPHICS MODE ////////
@@ -160,10 +162,10 @@ void StartIthTest(TestIter* test_iter, Test* tests) {
     bool success = expected == actual;
 
     if (success) {
-        print("Test %i %s | PASSED", test_iter->i, tests[test_iter->i].file_path);
+        print("Test %i | %s | PASSED", test_iter->i, tests[test_iter->i].file_path);
     }
     else {
-        print("Test %i %s | FAILED | Expected %i, Got %i", test_iter->i, tests[test_iter->i].file_path, expected, actual);
+        print("Test %i | %s | FAILED | Expected %i, Got %i", test_iter->i, tests[test_iter->i].file_path, expected, actual);
     }
 
 }
