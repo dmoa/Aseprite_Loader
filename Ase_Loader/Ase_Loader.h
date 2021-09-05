@@ -51,6 +51,7 @@ Let me know if you want something added,
 #pragma once
 
 #include <stdio.h>
+#include <iostream>
 #include <fstream>
 #include <string>
 #include <vector>
@@ -128,6 +129,27 @@ struct Ase_Header {
     u16 grid_width;
     u16 grid_height;
 };
+
+
+#ifdef ASE_LOADER_DEBUG
+
+inline void Debug_PrintHeader(Ase_Header* h) {
+    printf("file_size: %i\n", h->file_size);
+    printf("magic_number: %i\n", h->magic_number);
+    printf("num_frames: %i\n", h->num_frames);
+    printf("width: %i\n", h->width);
+    printf("height: %i\n", h->height);
+    printf("color_depth: %i\n", h->color_depth);
+    printf("flags: %i\n", h->flags);
+    printf("speed: %i\n", h->speed);
+    printf("palette_entry: %i\n", h->palette_entry);
+    printf("num_colors: %i\n", h->num_colors);
+    printf("pixel_width: %i\n", h->pixel_width);
+    printf("pixel_height: %i\n", h->pixel_height);
+}
+
+#endif
+
 
 struct Ase_Frame {
     u32 num_bytes;
@@ -239,6 +261,7 @@ Ase_Output* Ase_Load(std::string path) {
         output->frame_durations = bmalloc_arr(u16, header.num_frames);
         output->num_frames = header.num_frames;
 
+
         // Because we are using malloc, we cannot use default values in struct because
         // the memory that we are given has garbage values, so we have to manually set
         // the values here.
@@ -344,6 +367,7 @@ Ase_Output* Ase_Load(std::string path) {
                     }
 
                     case TAGS: {
+
                         output->num_tags = GetU16(buffer_p + 6);;
                         output->tags = bmalloc_arr(Ase_Tag, output->num_tags);
 
@@ -368,6 +392,7 @@ Ase_Output* Ase_Load(std::string path) {
                         break;
                     }
                     case SLICE: {
+
                         u32 num_keys = GetU32(buffer_p + 6);
                         u32 flag = GetU32(buffer_p + 10);
                         if (flag != 0) {
@@ -408,6 +433,7 @@ Ase_Output* Ase_Load(std::string path) {
         }
 
         // convert vector to array for output
+
         output->slices = bmalloc_arr(Slice, temp_slices.size());
 
         // We do "int i" instead of u8 / u16 / u32... because we don't know how many slices there are upfront :(
@@ -440,7 +466,6 @@ inline void Ase_Destroy_Output(Ase_Output* output) {
     // There are cases where memory is never allocated for these fyi.
     free(output->tags);
     free(output->slices);
-    //
 
     free(output);
 }
