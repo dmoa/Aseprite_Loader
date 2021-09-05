@@ -17,6 +17,8 @@
 #undef printf
 #define printf SDL_Log
 
+#define strequal(a,b) strcmp(a,b)==0
+
 #include "../Ase_Loader/Ase_Loader.h"
 
 
@@ -38,10 +40,17 @@ struct Graphics {
     SDL_Renderer* rdr;
 };
 
+enum Test_Types {
+    NULL_TEST,
+    SLICES,
+    SLICE_NAMES
+};
+
 // Expected results
 struct Test {
+    Test_Types type = NULL_TEST;
     char* file_path = NULL;
-    u32 num_slices = 0;
+    void* expected;
 };
 
 struct TestIter {
@@ -72,13 +81,14 @@ int main(int argc, char* argv[]) {
 
 
     Test tests [] = {
-        {"tests/1_no_slices_blank.ase", 0},
-        {"tests/1.1_no_slices.ase", 0},
-        {"tests/2.1_no_slices.ase", 0},
-        {"tests/2.2_no_slices_animated.ase", 0},
-        {"tests/3.1_seven_slices_blank.ase", 7},
-        {"tests/3.0_one_slice.ase", 1},
-        {"tests/3.2_animated_two_slices.ase", 2}
+        {SLICES, "tests/1_no_slices_blank.ase", 0},
+        {SLICES, "tests/1.1_no_slices.ase", 0},
+        {SLICES, "tests/2.1_no_slices.ase", 0},
+        {SLICES, "tests/2.2_no_slices_animated.ase", 0},
+        {SLICES, "tests/3.1_seven_slices_blank.ase", 7},
+        {SLICES, "tests/3.0_one_slice.ase", 1},
+        {SLICES, "tests/3.2_animated_two_slices.ase", 2},
+        {SLICE_NAMES, "tests/4.0_slice_names_empty.ase", "example_slice"}
 	};
     TestIter test_iter;
     int num_tests = sizeof(tests) / sizeof(tests[0]);
@@ -156,10 +166,22 @@ void StartIthTest(TestIter* test_iter, Test* tests) {
 
     test_iter->ase = Ase_Load(tests[test_iter->i].file_path);
 
-    u32 expected = tests[test_iter->i].num_slices;
-    u32 actual = test_iter->ase->num_slices;
+    u32 expected = tests[test_iter->i].expected;
+    u32 actual;
+    bool success;
 
-    bool success = expected == actual;
+    if (tests[test_iter->i].type == SLICES) {
+        actual = test_iter->ase->num_slices;
+        success = expected == actual;
+    }
+    else if (tests[test_iter->i].type == SLICE_NAMES) {
+        actual = test_iter->ase->slices[0].name;
+        success = strequal(expected, actual);
+    }
+    else {
+        print("Test %i has null test type!", NULL_TEST);
+    }
+
 
     if (success) {
         print("Test %i | %s | PASSED", test_iter->i, tests[test_iter->i].file_path);
