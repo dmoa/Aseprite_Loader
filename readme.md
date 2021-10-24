@@ -3,7 +3,7 @@
 Aseprite Loader is a C++11 library that loads .ase files, the file format used in the pixel editor [Aseprite](https://aseprite.org).
 
 ## Usage
-- Copy ase_loader.h and decompressor.h into your project folder
+- Copy ase_loader.h and decompressor.h into your project folder (or copy the single file under releases)
 - Only include ase_loader.h:
 ```c++
 #include "ase_loader.h"
