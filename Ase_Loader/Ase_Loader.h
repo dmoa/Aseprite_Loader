@@ -338,6 +338,11 @@ Ase_Output* Ase_Load(std::string path) {
                         s16 y_offset = GetU16(buffer_p + 10);
                         u16 cel_type = GetU16(buffer_p + 13);
 
+                        if (x_offset < 0 || y_offset < 0) {
+                            print("%s: Starting pixel coordinates out of bounds! Aseprite: Sprite -> Canvas Size -> Trim content outside of canvas [ON]", path.c_str());
+                            return NULL;
+                        }
+
                         if (cel_type != INDEX_FORMAT) {
                             printf("%s: Pixel format not supported!\n", path.c_str());
                             Ase_Destroy_Output(output);
