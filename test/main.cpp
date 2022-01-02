@@ -19,6 +19,7 @@
 
 #define strequal(a,b) strcmp(a,b)==0
 
+#define ASE_LOADER_IMPLEMENTATION
 #include "../Ase_Loader/Ase_Loader.h"
 
 

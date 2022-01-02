@@ -36,8 +36,9 @@ Chunks Supported:
         - Does not support 9 patches or pivot flags
         - Loads only first slice key
 
+Types have Ase_ prefix if they're Ase specific.
 
-- Only supports indexed color mode
+
 - Only supports zlib compressed pixel data
 
 - Does not support blend mode
@@ -149,6 +150,7 @@ inline void Debug_PrintHeader(Ase_Header* h) {
 #endif
 
 
+
 struct Ase_Frame {
     u32 num_bytes;
     u16 magic_number;
@@ -157,14 +159,14 @@ struct Ase_Frame {
     u32 new_num_chunks; // number of chunks, if 0, use old field.
 };
 
-struct Ase_Tag {
+struct Animation_Tag {
+    char* name;
     u16 from;
     u16 to;
-    char* name;
 };
 
-// delete and replace with SDL_Color if using SDL
-struct Ase_Color {
+// Delete and replace with SDL_Color if using SDL.
+struct Color {
     u8 r;
     u8 g;
     u8 b;
@@ -176,9 +178,10 @@ struct Ase_Color {
 struct Palette_Chunk {
     u32 num_entries;
     u8 color_key;
-    Ase_Color entries [256];
+    Color entries [256];
 };
 
+// Delete and replace with SDL_Rect if using SDL
 struct Rect {
     u32 x;
     u32 y;
@@ -200,7 +203,7 @@ struct Ase_Output {
     // Junk values if indexed color mode is not used
     Palette_Chunk palette;
 
-    Ase_Tag* tags;
+    Animation_Tag* tags;
     u16 num_tags;
 
     u16* frame_durations;
@@ -210,7 +213,16 @@ struct Ase_Output {
     u32 num_slices;
 };
 
-inline void Ase_Destroy_Output(Ase_Output* output);
+
+
+Ase_Output* Ase_Load(std::string path);
+void Ase_Destroy_Output(Ase_Output* output);
+
+
+
+#ifdef ASE_LOADER_IMPLEMENTATION
+
+
 
 Ase_Output* Ase_Load(std::string path) {
 
@@ -387,7 +399,7 @@ Ase_Output* Ase_Load(std::string path) {
                     case TAGS: {
 
                         output->num_tags = GetU16(buffer_p + 6);;
-                        output->tags = bmalloc_arr(Ase_Tag, output->num_tags);
+                        output->tags = bmalloc_arr(Animation_Tag, output->num_tags);
 
                         // iterate over each tag and append data to output->tags
                         int tag_buffer_offset = 0;
@@ -487,3 +499,6 @@ inline void Ase_Destroy_Output(Ase_Output* output) {
 
     free(output);
 }
+
+
+#endif

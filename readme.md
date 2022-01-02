@@ -4,9 +4,10 @@ Aseprite Loader is a C++11 library that loads .ase files, the file format used i
 
 ## Usage
 - Copy ase_loader.h and decompressor.h into your project folder (or copy the single file under releases)
-- Only include ase_loader.h:
+- Include ase_loader.h and define implementation:
 ```c++
 #include "ase_loader.h"
+#define ASE_LOADER_IMPLEMENTATION // define only in one file
 ```
 - Available functions:
 ```c++
