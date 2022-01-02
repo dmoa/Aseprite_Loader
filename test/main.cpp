@@ -88,8 +88,10 @@ int main(int argc, char* argv[]) {
         {SLICES, "tests/3.1_seven_slices_blank.ase", 7},
         {SLICES, "tests/3.0_one_slice.ase", 1},
         {SLICES, "tests/3.2_animated_two_slices.ase", 2},
-        {SLICE_NAMES, "tests/4.0_slice_names_empty.ase", "example_slice"}
+        {SLICE_NAMES, "tests/4.0_slice_names_empty.ase", "example_slice"},
+        {NULL_TEST, "tests/5.0_rgba_format.ase", "NULL"},
 	};
+
     TestIter test_iter;
     int num_tests = sizeof(tests) / sizeof(tests[0]);
 
@@ -104,7 +106,18 @@ int main(int argc, char* argv[]) {
 
             StartIthTest(& test_iter, & tests[0]);
 
-            SDL_Surface* surface = SDL_CreateRGBSurfaceWithFormatFrom(test_iter.ase->pixels, test_iter.ase->frame_width * test_iter.ase->num_frames, test_iter.ase->frame_height, 8, test_iter.ase->frame_width * test_iter.ase->num_frames, SDL_PIXELFORMAT_INDEX8);
+            SDL_PixelFormatEnum pixel_format;
+            if (test_iter.ase->bpp == 1) {
+                pixel_format = SDL_PIXELFORMAT_INDEX8;
+            }
+            else if (test_iter.ase->bpp == 4) {
+                pixel_format = SDL_PIXELFORMAT_RGBA32;
+            }
+            else {
+                print("Test %i | %i BPP not supported!", test_iter.i, test_iter.ase->bpp);
+            }
+
+            SDL_Surface* surface = SDL_CreateRGBSurfaceWithFormatFrom(test_iter.ase->pixels, test_iter.ase->frame_width * test_iter.ase->num_frames, test_iter.ase->frame_height, test_iter.ase->bpp * 8, test_iter.ase->bpp * test_iter.ase->frame_width * test_iter.ase->num_frames, pixel_format);
             if (! surface) print("Surface could not be created!, %s\n", SDL_GetError());
             SDL_SetPaletteColors(surface->format->palette, (SDL_Color*) & test_iter.ase->palette.entries, 0, test_iter.ase->palette.num_entries);
             SDL_SetColorKey(surface, SDL_TRUE, test_iter.ase->palette.color_key);
@@ -179,7 +192,8 @@ void StartIthTest(TestIter* test_iter, Test* tests) {
         success = strequal(expected, actual);
     }
     else {
-        print("Test %i has null test type!", NULL_TEST);
+        print("Test %i has null test type!", test_iter->i);
+        return;
     }
 
 
@@ -200,7 +214,7 @@ void GraphicsLaunch(Graphics* g) {
     SDL_Init(SDL_INIT_EVERYTHING);
     IMG_Init(IMG_INIT_PNG);
 
-    g->window = SDL_CreateWindow("Test", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 800, 800, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
+    g->window = SDL_CreateWindow("Test", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 1600, 800, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
     g->rdr = SDL_CreateRenderer(g->window, -1, SDL_RENDERER_ACCELERATED);
     const int scale = 4;
     SDL_RenderSetScale(g->rdr, scale, scale);

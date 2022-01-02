@@ -104,8 +104,6 @@ inline u32 GetU32(void* memory) {
 #define USER_DATA 0x2020
 #define SLICE 0x2022
 
-#define INDEX_FORMAT 2 // indexed color format flag
-
 struct Ase_Header {
     u32 file_size;
     u16 magic_number;
@@ -195,8 +193,11 @@ struct Slice {
 
 struct Ase_Output {
     u8* pixels;
+    u8 bpp;           // bytes per pixel
     u16 frame_width;
     u16 frame_height;
+
+    // Junk values if indexed color mode is not used
     Palette_Chunk palette;
 
     Ase_Tag* tags;
@@ -247,13 +248,14 @@ Ase_Output* Ase_Load(std::string path) {
             GetU16(& buffer[42])
         };
 
-        if (header.color_depth != 8) {
-            printf("%s: Not in indexed color mode. Only indexed color mode supported.\n", path.c_str());
+        if (! (header.color_depth == 8 || header.color_depth == 32)) {
+            printf("%s: Color depth %i not supported.\n", path.c_str(), header.color_depth);
             return NULL;
         }
 
         Ase_Output* output = bmalloc(Ase_Output);
-        output->pixels = bmalloc_arr(u8, header.width * header.height * header.num_frames);
+        output->bpp = header.color_depth / 8;
+        output->pixels = bmalloc_arr(u8, header.width * header.height * header.num_frames * output->bpp);
         output->frame_width = header.width;
         output->frame_height = header.height;
         output->palette.color_key = header.palette_entry;
@@ -279,32 +281,34 @@ Ase_Output* Ase_Load(std::string path) {
         // This helps us with formulating output but not all frame data is needed for output.
         Ase_Frame frames [header.num_frames];
 
-        // fill the pixel indexes in the frame with transparent color index
-        for (int i = 0; i < header.width * header.height * header.num_frames; i++) {
-            output->pixels[i] = header.palette_entry;
+        // Indexed? fill the pixel indexes in the frame with transparent color index
+        if (header.color_depth == 8) {
+            for (int i = 0; i < header.width * header.height * header.num_frames; i++) {
+                output->pixels[i] = header.palette_entry;
+            }
         }
 
         // Each frame may have multiple chunks, so we first get frame data, then iterate over all the chunks that the frame has.
-        for (u16 i = 0; i < header.num_frames; i++) {
+        for (u16 current_frame_index = 0; current_frame_index < header.num_frames; current_frame_index++) {
 
-            frames[i] = {
+            frames[current_frame_index] = {
                 GetU32(buffer_p),
                 GetU16(buffer_p + 4),
                 GetU16(buffer_p + 6),
                 GetU16(buffer_p + 8),
                 GetU32(buffer_p + 12)
             };
-            output->frame_durations[i] = frames[i].frame_duration;
+            output->frame_durations[current_frame_index] = frames[current_frame_index].frame_duration;
 
-            if (frames[i].magic_number != FRAME_MN) {
-                printf("%s: Frame %i magic number not correct, corrupt file?\n", path.c_str(), i);
+            if (frames[current_frame_index].magic_number != FRAME_MN) {
+                printf("%s: Frame %i magic number not correct, corrupt file?\n", path.c_str(), current_frame_index);
                 Ase_Destroy_Output(output);
                 return NULL;
             }
 
             buffer_p += FRAME_SIZE;
 
-            for (u32 j = 0; j < frames[i].new_num_chunks; j++) {
+            for (u32 j = 0; j < frames[current_frame_index].new_num_chunks; j++) {
 
                 u32 chunk_size = GetU32(buffer_p);
                 u16 chunk_type = GetU16(buffer_p + 4);
@@ -343,28 +347,37 @@ Ase_Output* Ase_Load(std::string path) {
                             return NULL;
                         }
 
-                        if (cel_type != INDEX_FORMAT) {
-                            printf("%s: Pixel format not supported!\n", path.c_str());
+
+                        if (cel_type != 2) {
+                            printf("%s: Only compressed images supported\n", path.c_str());
                             Ase_Destroy_Output(output);
                             return NULL;
                         }
 
                         u16 width  = GetU16(buffer_p + 22);
                         u16 height = GetU16(buffer_p + 24);
-                        u8 pixels [width * height];
+                        u8 pixels [width * height * output->bpp];
 
-                        unsigned int data_size = Decompressor_Feed(buffer_p + 26, 26 - chunk_size, pixels, width * height, true);
+                        // have to use pixels instead of output->pixels because we need to convert the pixel position if there's more than one frame
+                        unsigned int data_size = Decompressor_Feed(buffer_p + 26, 26 - chunk_size, pixels, width * height * output->bpp, true);
                         if (data_size == -1) {
                             printf("%s: Pixel format not supported!\n", path.c_str());
                             Ase_Destroy_Output(output);
                             return NULL;
                         }
 
+                        //
                         // transforming array of pixels onto larger array of pixels
-                        const int pixel_offset = header.width * header.num_frames * y_offset + i * header.width + x_offset;
+                        //
 
-                        for (int k = 0; k < width * height; k ++) {
-                            int index = pixel_offset + k%width + floor(k / width) * header.width * header.num_frames;
+                        // Our offset will be larger for a spritesheet because the total width of the image would have increased (when creating a spritesheet texture from .ase).
+                        // Same logic with offset_x.
+                        const int byte_offset_y = header.width * header.num_frames * y_offset * output->bpp;
+                        const int byte_offset_x = (current_frame_index * header.width + x_offset) * output->bpp;
+                        const int byte_offset = byte_offset_x + byte_offset_y;
+
+                        for (int k = 0; k < width * height * output->bpp; k ++) {
+                            int index = byte_offset + k % (width * output->bpp) + floor(k / width / output->bpp) * header.width * header.num_frames * output->bpp;
                             output->pixels[index] = pixels[k];
                         }
 
