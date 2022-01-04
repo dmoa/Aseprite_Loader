@@ -217,11 +217,23 @@ struct Ase_Output {
 
 Ase_Output* Ase_Load(std::string path);
 void Ase_Destroy_Output(Ase_Output* output);
+bool Ase_SetFlipVerticallyOnLoad(bool input_flag);
+
+
 
 
 
 #ifdef ASE_LOADER_IMPLEMENTATION
 
+
+
+
+
+static bool vertically_flip_on_load = false;
+
+bool Ase_SetFlipVerticallyOnLoad(bool input_flag) {
+   vertically_flip_on_load = input_flag;
+}
 
 
 Ase_Output* Ase_Load(std::string path) {
@@ -388,7 +400,9 @@ Ase_Output* Ase_Load(std::string path) {
                         const int byte_offset_x = (current_frame_index * header.width + x_offset) * output->bpp;
                         const int byte_offset = byte_offset_x + byte_offset_y;
 
-                        for (int k = 0; k < width * height * output->bpp; k ++) {
+                        const int total_num_bytes = width * height * output->bpp;
+
+                        for (int k = 0; k < total_num_bytes; k ++) {
                             int index = byte_offset + k % (width * output->bpp) + floor(k / width / output->bpp) * header.width * header.num_frames * output->bpp;
                             output->pixels[index] = pixels[k];
                         }
@@ -459,6 +473,30 @@ Ase_Output* Ase_Load(std::string path) {
                     default: break;
                 }
                 buffer_p += chunk_size;
+            }
+        }
+
+        // flip pixels if vertically_flip_on_load is true
+        if (vertically_flip_on_load) {
+
+            u8 temp; // temp variable for swapping
+            int num_bytes_per_row = output->frame_width * output->num_frames * output->bpp;
+
+            for (int i = 0; i < (int) output->frame_height / 2; i++) {
+
+                // the pointers of the two rows we're swapping
+                u8* swap_a = output->pixels + i * num_bytes_per_row;
+                u8* swap_b = output->pixels + (output->frame_height - i - 1) * num_bytes_per_row;
+
+                // Swapping two rows of pixels, pixel by pixel.
+                // stb_image.h did it pixel by pixel instead of memcpy-ing the entire row at once
+                // I'm going to trust that that's a wise move and do that as well.
+                for (int j = 0; j < num_bytes_per_row; j++) {
+                    temp = *(swap_a + j);
+                    *(swap_a + j) = *(swap_b + j);
+                    *(swap_b + j) = temp;
+                }
+
             }
         }
 

@@ -13,6 +13,7 @@ Aseprite Loader is a C++11 library that loads .ase files, the file format used i
 ```c++
 Ase_Output* Ase_Load(std::string path);
 void Ase_Destroy_Output(Ase_Output* output);
+void Ase_SetFlipVerticallyOnLoad(bool input_flag);
 ```
 
 ## Example
