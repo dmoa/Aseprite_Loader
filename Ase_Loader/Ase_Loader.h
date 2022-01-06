@@ -85,6 +85,7 @@ inline u32 GetU32(void* memory) {
 
 #define bmalloc(t) (t*)(malloc(sizeof(t)))
 #define bmalloc_arr(t,n) (t*)(malloc(sizeof(t)*n))
+#define bcalloc_arr(t,n) (t*)(calloc(n, sizeof(t)))
 
 #define HEADER_MN 0xA5E0
 #define FRAME_MN 0xF1FA
@@ -279,7 +280,7 @@ Ase_Output* Ase_Load(std::string path) {
 
         Ase_Output* output = bmalloc(Ase_Output);
         output->bpp = header.color_depth / 8;
-        output->pixels = bmalloc_arr(u8, header.width * header.height * header.num_frames * output->bpp);
+        output->pixels = bcalloc_arr(u8, header.width * header.height * header.num_frames * output->bpp); // using calloc instead of malloc so that we avoid junk pixel data
         output->frame_width = header.width;
         output->frame_height = header.height;
         output->palette.color_key = header.palette_entry;
