@@ -130,28 +130,6 @@ struct Ase_Header {
     u16 grid_height;
 };
 
-
-#ifdef ASE_LOADER_DEBUG
-
-inline void Debug_PrintHeader(Ase_Header* h) {
-    printf("file_size: %i\n", h->file_size);
-    printf("magic_number: %i\n", h->magic_number);
-    printf("num_frames: %i\n", h->num_frames);
-    printf("width: %i\n", h->width);
-    printf("height: %i\n", h->height);
-    printf("color_depth: %i\n", h->color_depth);
-    printf("flags: %i\n", h->flags);
-    printf("speed: %i\n", h->speed);
-    printf("palette_entry: %i\n", h->palette_entry);
-    printf("num_colors: %i\n", h->num_colors);
-    printf("pixel_width: %i\n", h->pixel_width);
-    printf("pixel_height: %i\n", h->pixel_height);
-}
-
-#endif
-
-
-
 struct Ase_Frame {
     u32 num_bytes;
     u16 magic_number;
@@ -218,7 +196,7 @@ struct Ase_Output {
 
 Ase_Output* Ase_Load(std::string path);
 void Ase_Destroy_Output(Ase_Output* output);
-bool Ase_SetFlipVerticallyOnLoad(bool input_flag);
+void Ase_SetFlipVerticallyOnLoad(bool input_flag);
 
 
 
@@ -232,7 +210,7 @@ bool Ase_SetFlipVerticallyOnLoad(bool input_flag);
 
 static bool vertically_flip_on_load = false;
 
-bool Ase_SetFlipVerticallyOnLoad(bool input_flag) {
+void Ase_SetFlipVerticallyOnLoad(bool input_flag) {
    vertically_flip_on_load = input_flag;
 }
 
