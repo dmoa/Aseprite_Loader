@@ -498,7 +498,7 @@ Ase_Output* Ase_Load(std::string path) {
     }
 }
 
-inline void Ase_Destroy_Output(Ase_Output* output) {
+void Ase_Destroy_Output(Ase_Output* output) {
 
     free(output->pixels);
     free(output->frame_durations);
